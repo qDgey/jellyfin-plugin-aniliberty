@@ -8,6 +8,14 @@
     "category": "Metadata",
     "versions": [
       {
+        "version": "0.5.2.0",
+        "changelog": "Ссылка и идентификатор MyAnimeList",
+        "targetAbi": "12.1.0.0",
+        "sourceUrl": "https://github.com/qDgey/jellyfin-plugin-aniliberty/releases/download/v0.5.2.0/aniliberty_0.5.2.0.zip",
+        "checksum": "64658ee8597e0a855957e93be5176401",
+        "timestamp": "2026-09-22T21:39:01Z"
+      },
+      {
         "version": "0.5.1.0",
         "changelog": "Автовыбор доступного зеркала Shikimori",
         "targetAbi": "12.1.0.0",
