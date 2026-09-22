@@ -42,7 +42,7 @@ public sealed class TitleImageProvider : IRemoteImageProvider, IHasOrder
             images.Add(new RemoteImageInfo { ProviderName = Name, Url = poster, Type = ImageType.Primary, Language = "ru" });
         }
 
-        // Shikimori poster only for titles AniLiberty removed: it's throttled to ~1.4 rps, too slow for every title.
+        // Shikimori poster only for titles not found on AniLiberty: it's throttled to ~1.4 rps, too slow for every title.
         if (images.Count == 0
             && (Plugin.Instance?.Configuration.EnableShikimoriFallback ?? true)
             && TryId(item, Plugin.ShikimoriKey, out var shikiId)

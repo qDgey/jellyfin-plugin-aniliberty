@@ -7,8 +7,8 @@ public class PluginConfiguration : BasePluginConfiguration
     /// <summary>AniLiberty site root; API lives under /api/v1 and images are relative to it.</summary>
     public string SiteUrl { get; set; } = "https://aniliberty.top";
 
-    /// <summary>Shikimori site root, used when a release is not (or no longer) on AniLiberty.</summary>
-    public string ShikimoriUrl { get; set; } = "https://shikimori.io";
+    /// <summary>Shikimori site root, used when a release isn't found on AniLiberty.</summary>
+    public string ShikimoriUrl { get; set; } = "https://shikimori.rip";
 
     public bool EnableShikimoriFallback { get; set; } = true;
 
