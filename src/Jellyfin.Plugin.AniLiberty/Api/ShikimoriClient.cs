@@ -1,0 +1,98 @@
+using System.Collections.Concurrent;
+using System.Text.RegularExpressions;
+
+namespace Jellyfin.Plugin.AniLiberty.Api;
+
+/// <summary>Shikimori API client used for releases that AniLiberty no longer lists (e.g. removed on copyright claims).</summary>
+public sealed partial class ShikimoriClient
+{
+    // Shikimori allows 5 rps / 90 rpm.
+    private static readonly TimeSpan MinInterval = TimeSpan.FromMilliseconds(700);
+
+    private readonly IHttpClientFactory _httpFactory;
+    private readonly SemaphoreSlim _throttle = new(1, 1);
+    private readonly ConcurrentDictionary<long, ShikiAnime?> _details = new();
+    private DateTime _last = DateTime.MinValue;
+
+    public ShikimoriClient(IHttpClientFactory httpFactory)
+    {
+        _httpFactory = httpFactory;
+    }
+
+    public static string SiteUrl => (Plugin.Instance?.Configuration.ShikimoriUrl ?? "https://shikimori.io").TrimEnd('/');
+
+    public static string? ImageUrl(ShikiImage? image)
+    {
+        var src = image?.Original;
+        if (string.IsNullOrEmpty(src) || src.Contains("missing_", StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        return src.StartsWith("http", StringComparison.OrdinalIgnoreCase) ? src : SiteUrl + src;
+    }
+
+    public async Task<IReadOnlyList<ShikiAnime>> SearchAsync(string query, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(query))
+        {
+            return Array.Empty<ShikiAnime>();
+        }
+
+        var url = $"{SiteUrl}/api/animes?search={Uri.EscapeDataString(query)}&limit=10&censored=false";
+        return await GetAsync<List<ShikiAnime>>(url, ct).ConfigureAwait(false) ?? new List<ShikiAnime>();
+    }
+
+    public async Task<ShikiAnime?> GetAsync(long id, CancellationToken ct)
+    {
+        if (_details.TryGetValue(id, out var cached))
+        {
+            return cached;
+        }
+
+        var anime = await GetAsync<ShikiAnime>($"{SiteUrl}/api/animes/{id}", ct).ConfigureAwait(false);
+        _details[id] = anime;
+        return anime;
+    }
+
+    /// <summary>Strip Shikimori BBCode ([character=1]Name[/character], [i]…[/i]) from descriptions.</summary>
+    public static string? CleanDescription(string? description)
+    {
+        if (string.IsNullOrEmpty(description))
+        {
+            return description;
+        }
+
+        var s = BbCode().Replace(description, string.Empty);
+        return s.Replace("\r\n", "\n", StringComparison.Ordinal).Trim();
+    }
+
+    [GeneratedRegex(@"\[/?[a-z_]+(?:=[^\]]*)?\]", RegexOptions.IgnoreCase)]
+    private static partial Regex BbCode();
+
+    private async Task<T?> GetAsync<T>(string url, CancellationToken ct)
+    {
+        await _throttle.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            var wait = _last + MinInterval - DateTime.UtcNow;
+            if (wait > TimeSpan.Zero)
+            {
+                await Task.Delay(wait, ct).ConfigureAwait(false);
+            }
+
+            try
+            {
+                return await Http.GetJsonAsync<T>(_httpFactory.CreateClient(nameof(ShikimoriClient)), url, ct).ConfigureAwait(false);
+            }
+            finally
+            {
+                _last = DateTime.UtcNow;
+            }
+        }
+        finally
+        {
+            _throttle.Release();
+        }
+    }
+}
