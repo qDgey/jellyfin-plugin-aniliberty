@@ -38,10 +38,11 @@ jobs:
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
           NOTES="$(git tag -l --format='%(contents)' "$GITHUB_REF_NAME")"
-          gh release create "$GITHUB_REF_NAME" "dist/aniliberty_${VERSION}.zip" --title "$GITHUB_REF_NAME" --notes "${NOTES:-$GITHUB_REF_NAME}"
+          gh release create "$GITHUB_REF_NAME" "dist/aniliberty_${VERSION}.zip" --title "$GITHUB_REF_NAME" --notes "${NOTES:-$GITHUB_REF_NAME}"             || gh release upload "$GITHUB_REF_NAME" "dist/aniliberty_${VERSION}.zip" --clobber
           python3 .github/scripts/update_manifest.py "$VERSION" "dist/aniliberty_${VERSION}.zip" "${NOTES:-$GITHUB_REF_NAME}"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add manifest.json
           git commit -m "manifest: $VERSION"
-          git push origin main
+          # main may have moved while the build ran
+          for i in 1 2 3; do git pull --rebase origin main && git push origin main && break; sleep 5; done

@@ -8,6 +8,14 @@
     "category": "Metadata",
     "versions": [
       {
+        "version": "0.3.3.0",
+        "changelog": "Скрипт деревьев: любая структура архива, установщик install.sh; фильмы в отдельных папках сопоставляются по имени папки",
+        "targetAbi": "12.1.0.0",
+        "sourceUrl": "https://github.com/qDgey/jellyfin-plugin-aniliberty/releases/download/v0.3.3.0/aniliberty_0.3.3.0.zip",
+        "checksum": "bac194c1edc766aaa240c787609ef316",
+        "timestamp": "2026-09-22T14:55:03Z"
+      },
+      {
         "version": "0.3.2.0",
         "changelog": "Shikimori по умолчанию на shikimori.rip, жанры через GraphQL",
         "targetAbi": "12.1.0.0",
