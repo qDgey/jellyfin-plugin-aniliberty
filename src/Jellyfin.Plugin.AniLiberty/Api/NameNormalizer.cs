@@ -23,7 +23,7 @@ public static partial class NameNormalizer
     private static partial Regex NonWord();
 
     // AniLibria episode files: "86_Eighty_Six_[01]_[AniLibria_TV]_[WEBRip_1080p].mkv", "Title_[12.5]_[...]".
-    [GeneratedRegex(@"\[(\d{1,4}(?:\.\d)?)(?:v\d)?\]")]
+    [GeneratedRegex(@"\[(\d{1,4}(?:\.\d)?)(?:v\d)?(?:[ _]END)?\]", RegexOptions.IgnoreCase)]
     private static partial Regex BracketEpisode();
 
     [GeneratedRegex(@"(?:^|[\s_\-.])(?:ep?|episode|серия)?\s*(\d{1,4})(?:v\d)?(?=[\s_\-.\[]|$)", RegexOptions.IgnoreCase)]

@@ -130,6 +130,15 @@ public sealed class ReleaseResolver
                 yield return Path.GetFileName(target);
             }
 
+            // Series tree folders merge several torrent folders; their episode symlinks point into them.
+            foreach (var torrentFolder in TorrentFoldersBehind(info.Path))
+            {
+                if (seen.Add(torrentFolder))
+                {
+                    yield return torrentFolder;
+                }
+            }
+
             var trimmed = info.Path.TrimEnd('/', '\\');
             var file = Path.GetFileName(trimmed);
             if (seen.Add(file))
@@ -147,6 +156,32 @@ public sealed class ReleaseResolver
         if (!string.IsNullOrEmpty(info.Name) && seen.Add(info.Name))
         {
             yield return info.Name;
+        }
+    }
+
+    /// <summary>Names of the torrent folders that a symlinked series folder (or its Season subfolder) points into.</summary>
+    private static List<string> TorrentFoldersBehind(string path)
+    {
+        if (!Directory.Exists(path))
+        {
+            return new List<string>();
+        }
+
+        try
+        {
+            return Directory.EnumerateFiles(path, "*", new EnumerationOptions { RecurseSubdirectories = true, MaxRecursionDepth = 2 })
+                .Select(LinkTarget)
+                .OfType<string>()
+                .Select(t => Path.GetFileName(Path.GetDirectoryName(t)))
+                .OfType<string>()
+                .Where(n => n.Length > 0)
+                .Distinct(StringComparer.Ordinal)
+                .Take(4)
+                .ToList();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return new List<string>();
         }
     }
 

@@ -1,8 +1,0 @@
-[Unit]
-Description=Rebuild AniLibria movie symlink tree for Jellyfin
-RequiresMountsFor=/media/anilibria
-
-[Service]
-Type=oneshot
-User=jellyfin
-ExecStart=/usr/bin/python3 /usr/local/bin/anilibria-movies.py /media/anilibria /srv/anilibria-movies
