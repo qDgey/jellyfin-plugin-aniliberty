@@ -156,3 +156,32 @@ public class ShikiAnime
     public long? MyAnimeListId { get; set; }
     public List<ShikiGenre>? Genres { get; set; }
 }
+
+// Franchises: ordered groups of releases (seasons, movies, OVAs) of one title.
+
+public class FranchiseImage
+{
+    public string? Preview { get; set; }
+    public string? Thumbnail { get; set; }
+}
+
+public class FranchiseRelease
+{
+    [JsonPropertyName("sort_order")]
+    public int SortOrder { get; set; }
+    [JsonPropertyName("release_id")]
+    public long ReleaseId { get; set; }
+}
+
+public class Franchise
+{
+    public string Id { get; set; } = string.Empty;
+    public string? Name { get; set; }
+    [JsonPropertyName("name_english")]
+    public string? NameEnglish { get; set; }
+    public FranchiseImage? Image { get; set; }
+    [JsonPropertyName("first_year")]
+    public int? FirstYear { get; set; }
+    [JsonPropertyName("franchise_releases")]
+    public List<FranchiseRelease>? FranchiseReleases { get; set; }
+}

@@ -3,7 +3,8 @@ Description=Hourly AniLibria series/movie tree rebuild
 
 [Timer]
 OnBootSec=2min
-OnUnitActiveSec=1h
+OnCalendar=hourly
+RandomizedDelaySec=5min
 
 [Install]
 WantedBy=timers.target
