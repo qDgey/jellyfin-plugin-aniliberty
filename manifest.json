@@ -1,0 +1,11 @@
+[
+  {
+    "guid": "5b7c3f7e-2c1a-4d7e-9a57-7a1b0c0de001",
+    "name": "AniLiberty Metadata",
+    "description": "Метаданные AniLibria/AniLiberty для локальных торрент-релизов, синхронизация с аккаунтами AniLiberty и коллекции-франшизы.",
+    "overview": "AniLiberty metadata, account sync and franchise collections for local AniLibria releases",
+    "owner": "qDgey",
+    "category": "Metadata",
+    "versions": []
+  }
+]

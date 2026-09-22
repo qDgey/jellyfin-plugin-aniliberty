@@ -5,7 +5,7 @@ namespace Jellyfin.Plugin.AniLiberty.Api;
 
 internal static class Http
 {
-    public const string UserAgent = "Jellyfin-Plugin-AniLiberty/0.1 (+https://github.com/jellyfin)";
+    public const string UserAgent = "Jellyfin-Plugin-AniLiberty (+https://github.com/qDgey/jellyfin-plugin-aniliberty)";
 
     public static readonly JsonSerializerOptions Json = new()
     {

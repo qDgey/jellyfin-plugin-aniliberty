@@ -10,7 +10,7 @@ episode's copies are named as versions of the same episode, so Jellyfin shows on
 /srv/anilibria-series/86 - Eighty Six/Season 01/86 - Eighty Six S01E01 - WEBRip 1080p.mkv
 /srv/anilibria-series/86 - Eighty Six/Season 01/86 - Eighty Six S01E01 - WEBRip 1080p HEVC.mkv
 
-Movies: loose video files at the archive root, grouped the same way (see scripts/anilibria-movies.py history):
+Movies: loose video files at the archive root, grouped the same way:
 /srv/anilibria-movies/<Title>/<Title> - <version>.mkv
 
 Files whose episode number can't be read keep their original name (no version merging for them).
@@ -20,9 +20,10 @@ import os
 import re
 import sys
 
-SRC = "/media/anilibria"
-SERIES = "/srv/anilibria-series"
-MOVIES = "/srv/anilibria-movies"
+# Paths can be overridden with environment variables (see anilibria-tree.service).
+SRC = os.environ.get("ANILIBRIA_SOURCE", "/media/anilibria")
+SERIES = os.environ.get("ANILIBRIA_SERIES", "/srv/anilibria-series")
+MOVIES = os.environ.get("ANILIBRIA_MOVIES", "/srv/anilibria-movies")
 VIDEO = re.compile(r"\.(mkv|mp4|avi|m4v)$", re.I)
 GROUP_TAG = re.compile(r"^anili(bria|berty)", re.I)
 BRACKET_EPISODE = re.compile(r"\[(\d{1,4})(?:v\d)?(?:[ _]END)?\]", re.I)

@@ -1,0 +1,47 @@
+name: Release
+
+# Push a tag like v0.3.1.0 to build the plugin, attach it to a GitHub release
+# and add the version to manifest.json (the Jellyfin plugin repository file).
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: main
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Build
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          git checkout "$GITHUB_REF_NAME" -- src
+          dotnet build src/Jellyfin.Plugin.AniLiberty -c Release \
+            -p:Version="$VERSION" -p:AssemblyVersion="$VERSION" -p:FileVersion="$VERSION"
+          mkdir -p dist
+          zip -j "dist/aniliberty_${VERSION}.zip" src/Jellyfin.Plugin.AniLiberty/bin/Release/net10.0/Jellyfin.Plugin.AniLiberty.dll
+          git checkout main -- src
+
+      - name: Publish release and update manifest
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          NOTES="$(git tag -l --format='%(contents)' "$GITHUB_REF_NAME")"
+          gh release create "$GITHUB_REF_NAME" "dist/aniliberty_${VERSION}.zip" --title "$GITHUB_REF_NAME" --notes "${NOTES:-$GITHUB_REF_NAME}"
+          python3 .github/scripts/update_manifest.py "$VERSION" "dist/aniliberty_${VERSION}.zip" "${NOTES:-$GITHUB_REF_NAME}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add manifest.json
+          git commit -m "manifest: $VERSION"
+          git push origin main

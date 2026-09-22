@@ -4,5 +4,9 @@ RequiresMountsFor=/media/anilibria
 
 [Service]
 Type=oneshot
+# Run as the user Jellyfin runs as, so it can read the trees.
 User=jellyfin
+Environment=ANILIBRIA_SOURCE=/media/anilibria
+Environment=ANILIBRIA_SERIES=/srv/anilibria-series
+Environment=ANILIBRIA_MOVIES=/srv/anilibria-movies
 ExecStart=/usr/bin/python3 /usr/local/bin/anilibria-tree.py
