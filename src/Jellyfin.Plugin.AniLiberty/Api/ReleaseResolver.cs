@@ -116,6 +116,12 @@ public sealed class ReleaseResolver
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         if (!string.IsNullOrEmpty(info.Path))
         {
+            // Movie tree entries are symlinks to the torrent files; the target's name is the torrent name.
+            if (LinkTarget(info.Path) is { } target && seen.Add(Path.GetFileName(target)))
+            {
+                yield return Path.GetFileName(target);
+            }
+
             var trimmed = info.Path.TrimEnd('/', '\\');
             var file = Path.GetFileName(trimmed);
             if (seen.Add(file))
@@ -133,6 +139,22 @@ public sealed class ReleaseResolver
         if (!string.IsNullOrEmpty(info.Name) && seen.Add(info.Name))
         {
             yield return info.Name;
+        }
+    }
+
+    private static string? LinkTarget(string path)
+    {
+        try
+        {
+            return File.ResolveLinkTarget(path, returnFinalTarget: true)?.FullName;
+        }
+        catch (IOException)
+        {
+            return null;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return null;
         }
     }
 

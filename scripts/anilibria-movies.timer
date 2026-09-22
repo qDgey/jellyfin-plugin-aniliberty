@@ -1,0 +1,9 @@
+[Unit]
+Description=Hourly AniLibria movie tree rebuild
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=1h
+
+[Install]
+WantedBy=timers.target
