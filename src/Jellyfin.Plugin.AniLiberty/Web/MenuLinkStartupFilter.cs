@@ -70,6 +70,11 @@ public sealed class MenuLinkStartupFilter : IStartupFilter
                 bytes = Inject(bytes);
                 context.Response.ContentLength = bytes.Length;
                 context.Response.Headers.Remove("ETag");
+
+                // The static file has only Last-Modified, so browsers cache it heuristically for hours and
+                // never see the injected link (or a later change of it). Make them revalidate every time.
+                context.Response.Headers.Remove("Last-Modified");
+                context.Response.Headers.CacheControl = "no-cache";
             }
             catch (JsonException ex)
             {
