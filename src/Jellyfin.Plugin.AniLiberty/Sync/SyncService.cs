@@ -284,6 +284,9 @@ public sealed class SyncService
         await _account.RemoveFavoritesAsync(token, remote.Except(final).ToList(), ct).ConfigureAwait(false);
 
         var missing = final.Where(id => !index.ByRelease.ContainsKey(id)).OrderBy(id => id).ToList();
+        _logger.LogInformation(
+            "AniLiberty sync {User}: favorites {Count} ({Missing} not in library), → remote +{Add} -{Remove}",
+            user.Username, final.Count, missing.Count, final.Count(id => !remote.Contains(id)), remote.Count(id => !final.Contains(id)));
         return (final, missing);
     }
 
@@ -333,7 +336,11 @@ public sealed class SyncService
 
         var set = final.Where(p => remote.GetValueOrDefault(p.Key) != p.Value).ToDictionary(p => p.Key, p => p.Value);
         await _account.SetCollectionsAsync(token, set, ct).ConfigureAwait(false);
-        await _account.RemoveFromCollectionsAsync(token, remote.Keys.Where(id => !final.ContainsKey(id)).ToList(), ct).ConfigureAwait(false);
+        var removed = remote.Keys.Where(id => !final.ContainsKey(id)).ToList();
+        await _account.RemoveFromCollectionsAsync(token, removed, ct).ConfigureAwait(false);
+        _logger.LogInformation(
+            "AniLiberty sync {User}: collections {Count}, → remote {Set} set, {Removed} removed",
+            user.Username, final.Count, set.Count, removed.Count);
 
         return (final, playlists);
     }

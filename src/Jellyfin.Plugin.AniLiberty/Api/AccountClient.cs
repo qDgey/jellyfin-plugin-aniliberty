@@ -82,13 +82,12 @@ public sealed class AccountClient
 
         try
         {
-            using var doc = await SendAsync(HttpMethod.Post, "/accounts/otp/login", null, new { code = numeric, device_id = deviceId }, ct).ConfigureAwait(false);
+            using var doc = await SendAsync(HttpMethod.Post, "/accounts/otp/login", null, new { code = numeric, device_id = deviceId }, ct, retry: false).ConfigureAwait(false);
             return doc?.RootElement.TryGetProperty("token", out var t) == true ? t.GetString() : null;
         }
-        catch (HttpRequestException ex) when (ex.StatusCode is HttpStatusCode.UnprocessableEntity or HttpStatusCode.NotFound
-                                                  or HttpStatusCode.BadRequest or HttpStatusCode.Unauthorized)
+        catch (HttpRequestException)
         {
-            // Not accepted yet (or expired): the caller keeps polling until the ticket runs out.
+            // Not accepted yet (AniLiberty answers 500 for that, not 4xx) or expired: the page keeps polling.
             return null;
         }
     }
@@ -221,7 +220,7 @@ public sealed class AccountClient
         }
     }
 
-    private async Task<JsonDocument?> SendAsync(HttpMethod method, string path, string? token, object? body, CancellationToken ct)
+    private async Task<JsonDocument?> SendAsync(HttpMethod method, string path, string? token, object? body, CancellationToken ct, bool retry = true)
     {
         var client = _httpFactory.CreateClient(NamedClient.Default);
         for (var attempt = 0; ; attempt++)
@@ -250,7 +249,7 @@ public sealed class AccountClient
                     throw new AccountUnauthorizedException($"AniLiberty rejected the token ({(int)resp.StatusCode}) for {path}");
                 }
 
-                if ((resp.StatusCode == HttpStatusCode.TooManyRequests || (int)resp.StatusCode >= 500) && attempt < 3)
+                if (retry && (resp.StatusCode == HttpStatusCode.TooManyRequests || (int)resp.StatusCode >= 500) && attempt < 3)
                 {
                     await Task.Delay(resp.Headers.RetryAfter?.Delta ?? TimeSpan.FromSeconds(2 << attempt), ct).ConfigureAwait(false);
                     continue;
@@ -269,7 +268,7 @@ public sealed class AccountClient
                 await stream.CopyToAsync(buffer, cts.Token).ConfigureAwait(false);
                 return buffer.Length == 0 ? null : JsonDocument.Parse(buffer.ToArray());
             }
-            catch (Exception ex) when (ex is OperationCanceledException or IOException && !ct.IsCancellationRequested && attempt < 3)
+            catch (Exception ex) when (ex is OperationCanceledException or IOException && retry && !ct.IsCancellationRequested && attempt < 3)
             {
                 await Task.Delay(TimeSpan.FromSeconds(1 << attempt), ct).ConfigureAwait(false);
             }
