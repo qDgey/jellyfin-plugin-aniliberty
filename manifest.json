@@ -8,6 +8,14 @@
     "category": "Metadata",
     "versions": [
       {
+        "version": "0.4.2.0",
+        "changelog": "Пункт AniLiberty в меню появляется без очистки кэша браузера",
+        "targetAbi": "12.1.0.0",
+        "sourceUrl": "https://github.com/qDgey/jellyfin-plugin-aniliberty/releases/download/v0.4.2.0/aniliberty_0.4.2.0.zip",
+        "checksum": "7e7ca44e8d9fb74ed56743fd30c5932c",
+        "timestamp": "2026-09-22T17:03:52Z"
+      },
+      {
         "version": "0.4.1.0",
         "changelog": "Ссылка на Shikimori на странице тайтла подписана как Shikimori",
         "targetAbi": "12.1.0.0",
