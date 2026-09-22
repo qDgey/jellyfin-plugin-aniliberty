@@ -30,25 +30,30 @@ public sealed class ShikimoriExternalId : IExternalId
     public bool Supports(IHasProviderIds item) => item is Series or Movie;
 }
 
+// Jellyfin labels every link with its provider's Name, so each site needs its own provider.
+
 public sealed class ExternalUrlProvider : IExternalUrlProvider
 {
     public string Name => Plugin.ProviderName;
 
     public IEnumerable<string> GetExternalUrls(BaseItem item)
     {
-        if (item is not (Series or Movie))
-        {
-            yield break;
-        }
-
-        if (item.TryGetProviderId(Plugin.ProviderKey, out var id))
+        if (item is Series or Movie && item.TryGetProviderId(Plugin.ProviderKey, out var id))
         {
             yield return AniLibertyClient.ReleasePageUrl(id);
         }
+    }
+}
 
-        if (item.TryGetProviderId(Plugin.ShikimoriKey, out var shiki))
+public sealed class ShikimoriExternalUrlProvider : IExternalUrlProvider
+{
+    public string Name => "Shikimori";
+
+    public IEnumerable<string> GetExternalUrls(BaseItem item)
+    {
+        if (item is Series or Movie && item.TryGetProviderId(Plugin.ShikimoriKey, out var id))
         {
-            yield return ShikimoriClient.SiteUrl + "/animes/" + shiki;
+            yield return ShikimoriClient.SiteUrl + "/animes/" + id;
         }
     }
 }
