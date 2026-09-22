@@ -83,7 +83,7 @@ public sealed partial class ShikimoriClient
 
             try
             {
-                return await Http.GetJsonAsync<T>(_httpFactory.CreateClient(nameof(ShikimoriClient)), url, ct).ConfigureAwait(false);
+                return await Http.GetJsonAsync<T>(_httpFactory.CreateClient(MediaBrowser.Common.Net.NamedClient.Default), url, ct).ConfigureAwait(false);
             }
             finally
             {

@@ -45,7 +45,7 @@ internal static class Http
         }
     }
 
-    private static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(20);
+    private static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(10);
 
     /// <summary>GET JSON; returns default on 404, retries on 429/5xx and stalled responses.</summary>
     public static async Task<T?> GetJsonAsync<T>(HttpClient client, string url, CancellationToken ct)
@@ -61,6 +61,10 @@ internal static class Http
                 using var req = new HttpRequestMessage(HttpMethod.Get, url);
                 req.Headers.UserAgent.ParseAdd(UserAgent);
                 req.Headers.Accept.ParseAdd("application/json");
+
+                // Uncompressed bodies from AniLiberty stall ~15% of the time; compressed ones don't.
+                req.Headers.AcceptEncoding.ParseAdd("gzip");
+                req.Headers.AcceptEncoding.ParseAdd("br");
                 using var resp = await client.SendAsync(req, HttpCompletionOption.ResponseContentRead, cts.Token).ConfigureAwait(false);
 
                 if (resp.StatusCode == HttpStatusCode.NotFound)
@@ -83,7 +87,16 @@ internal static class Http
                     return default;
                 }
 
-                await using var stream = await resp.Content.ReadAsStreamAsync(cts.Token).ConfigureAwait(false);
+                await using var raw = await resp.Content.ReadAsStreamAsync(cts.Token).ConfigureAwait(false);
+
+                // Decompress ourselves when the handler didn't (it strips Content-Encoding when it does).
+                var encoding = resp.Content.Headers.ContentEncoding.LastOrDefault();
+                await using Stream stream = encoding switch
+                {
+                    "gzip" => new System.IO.Compression.GZipStream(raw, System.IO.Compression.CompressionMode.Decompress),
+                    "br" => new System.IO.Compression.BrotliStream(raw, System.IO.Compression.CompressionMode.Decompress),
+                    _ => raw,
+                };
                 return await JsonSerializer.DeserializeAsync<T>(stream, Json, cts.Token).ConfigureAwait(false);
             }
             catch (Exception ex) when (ex is OperationCanceledException or HttpRequestException or IOException

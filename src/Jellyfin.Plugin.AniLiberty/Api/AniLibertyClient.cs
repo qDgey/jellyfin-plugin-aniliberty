@@ -79,7 +79,7 @@ public sealed class AniLibertyClient
         return index.TryFind(name, out id) ? id : null;
     }
 
-    private HttpClient Client() => _httpFactory.CreateClient(nameof(AniLibertyClient));
+    private HttpClient Client() => _httpFactory.CreateClient(MediaBrowser.Common.Net.NamedClient.Default);
 
     private async Task<TorrentIndex> GetIndexAsync(TimeSpan? forceIfOlderThan, CancellationToken ct)
     {
