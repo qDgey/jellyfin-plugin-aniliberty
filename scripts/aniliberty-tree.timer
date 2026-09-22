@@ -1,5 +1,5 @@
 [Unit]
-Description=Hourly AniLibria series/movie tree rebuild
+Description=Hourly AniLiberty series/movie tree rebuild
 
 [Timer]
 OnBootSec=2min

@@ -6,7 +6,7 @@ using MediaBrowser.Model.IO;
 namespace Jellyfin.Plugin.AniLiberty.Providers;
 
 /// <summary>
-/// The AniLibria archive mixes series folders with single-file movies/OVAs at its root. In a TV library those
+/// The AniLiberty archive mixes series folders with single-file movies/OVAs at its root. In a TV library those
 /// root files become orphan episodes; they belong to the movie library (built from symlinks), so skip them here.
 /// </summary>
 public sealed class RootFileIgnoreRule : IResolverIgnoreRule

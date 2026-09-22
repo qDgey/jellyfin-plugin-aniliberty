@@ -47,7 +47,7 @@ public static partial class NameNormalizer
         return NonWord().Replace(s.ToLowerInvariant(), " ").Trim();
     }
 
-    // Words that differ between AniLibria file names and database titles without changing the title.
+    // Words that differ between AniLiberty file names and database titles without changing the title.
     private static readonly HashSet<string> StopWords = new(StringComparer.Ordinal)
     {
         "the", "a", "no", "movie", "film", "gekijouban", "gekijououban", "ova", "ona", "oad", "special", "specials", "tv", "bd", "season",
@@ -79,7 +79,7 @@ public static partial class NameNormalizer
         return Regex.Replace(s, @"\s+", " ").Trim(' ', '-', '.');
     }
 
-    /// <summary>Episode number from the AniLibria "[07]" tag only; null when the file doesn't follow that convention.</summary>
+    /// <summary>Episode number from the AniLiberty "[07]" tag only; null when the file doesn't follow that convention.</summary>
     public static double? BracketEpisodeNumber(string? fileName)
     {
         if (string.IsNullOrEmpty(fileName))

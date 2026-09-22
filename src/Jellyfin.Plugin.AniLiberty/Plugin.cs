@@ -25,7 +25,7 @@ public sealed class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
 
     public override Guid Id => Guid.Parse("5b7c3f7e-2c1a-4d7e-9a57-7a1b0c0de001");
 
-    public override string Description => "Metadata for local AniLibria/AniLiberty releases (with Shikimori fallback).";
+    public override string Description => "Metadata for local AniLiberty releases (with Shikimori fallback).";
 
     public string CacheDirectory => Path.Combine(ApplicationPaths.CachePath, "aniliberty");
 

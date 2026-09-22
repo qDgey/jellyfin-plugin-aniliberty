@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
-"""Build Jellyfin-friendly symlink trees from the AniLibria torrent archive.
+"""Build Jellyfin-friendly symlink trees from the AniLiberty torrent archive.
 
 Series: every torrent folder of a release (AVC, HEVC, 720p...) is merged into one series folder, and each
 episode's copies are named as versions of the same episode, so Jellyfin shows one episode with a version picker:
 
-/media/anilibria/86 - Eighty Six - AniLibria.TV [WEBRip 1080p]/86_Eighty_Six_[01]_[AniLibria_TV]_[WEBRip_1080p].mkv
-/media/anilibria/86 - Eighty Six - AniLibria.TV [WEBRip 1080p HEVC]/86_Eighty_Six_[01]_..._HEVC].mkv
+/media/aniliberty/86 - Eighty Six - AniLibria.TV [WEBRip 1080p]/86_Eighty_Six_[01]_[AniLibria_TV]_[WEBRip_1080p].mkv
+/media/aniliberty/86 - Eighty Six - AniLibria.TV [WEBRip 1080p HEVC]/86_Eighty_Six_[01]_..._HEVC].mkv
   ->
-/srv/anilibria-series/86 - Eighty Six/Season 01/86 - Eighty Six S01E01 - WEBRip 1080p.mkv
-/srv/anilibria-series/86 - Eighty Six/Season 01/86 - Eighty Six S01E01 - WEBRip 1080p HEVC.mkv
+/srv/aniliberty-series/86 - Eighty Six/Season 01/86 - Eighty Six S01E01 - WEBRip 1080p.mkv
+/srv/aniliberty-series/86 - Eighty Six/Season 01/86 - Eighty Six S01E01 - WEBRip 1080p HEVC.mkv
 
 Movies: loose video files at the archive root, grouped the same way:
-/srv/anilibria-movies/<Title>/<Title> - <version>.mkv
+/srv/aniliberty-movies/<Title>/<Title> - <version>.mkv
 
 Files whose episode number can't be read keep their original name (no version merging for them).
 The metadata plugin follows the symlinks back to the torrent folder/file name to identify the release.
@@ -20,10 +20,10 @@ import os
 import re
 import sys
 
-# Paths can be overridden with environment variables (see anilibria-tree.service).
-SRC = os.environ.get("ANILIBRIA_SOURCE", "/media/anilibria")
-SERIES = os.environ.get("ANILIBRIA_SERIES", "/srv/anilibria-series")
-MOVIES = os.environ.get("ANILIBRIA_MOVIES", "/srv/anilibria-movies")
+# Paths can be overridden with environment variables (see aniliberty-tree.service).
+SRC = os.environ.get("ANILIBERTY_SOURCE", "/media/aniliberty")
+SERIES = os.environ.get("ANILIBERTY_SERIES", "/srv/aniliberty-series")
+MOVIES = os.environ.get("ANILIBERTY_MOVIES", "/srv/aniliberty-movies")
 VIDEO = re.compile(r"\.(mkv|mp4|avi|m4v)$", re.I)
 GROUP_TAG = re.compile(r"^anili(bria|berty)", re.I)
 BRACKET_EPISODE = re.compile(r"\[(\d{1,4})(?:v\d)?(?:[ _]END)?\]", re.I)

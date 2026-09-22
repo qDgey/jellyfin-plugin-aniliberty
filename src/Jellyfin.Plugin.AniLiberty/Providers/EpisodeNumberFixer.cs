@@ -7,7 +7,7 @@ namespace Jellyfin.Plugin.AniLiberty.Providers;
 
 /// <summary>
 /// Jellyfin's parser reads leading title digits as the episode ("100-man_no_Inochi_[03]_..." → 100).
-/// AniLibria files carry the real number in brackets, so correct the item before remote providers run.
+/// AniLiberty files carry the real number in brackets, so correct the item before remote providers run.
 /// </summary>
 public sealed class EpisodeNumberFixer : ICustomMetadataProvider<Episode>, IPreRefreshProvider
 {

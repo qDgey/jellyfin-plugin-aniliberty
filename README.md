@@ -1,19 +1,19 @@
 # AniLiberty для Jellyfin
 
 Плагин для [Jellyfin](https://jellyfin.org) 12, который превращает локальный архив торрентов
-[AniLibria / AniLiberty](https://aniliberty.top) в аккуратную медиатеку:
+[AniLiberty](https://aniliberty.top) (в том числе старые раздачи AniLibria.TV) в аккуратную медиатеку:
 
 - **Метаданные с AniLiberty** — русские названия, описания, жанры, возрастной рейтинг, постеры,
   названия серий, команда озвучки. Если релиз не найден на AniLiberty, данные берутся
   с [Shikimori](https://shikimori.rip).
-- **Точное сопоставление по имени торрента.** Имя папки/файла, которое создаёт торрент AniLibria,
+- **Точное сопоставление по имени торрента.** Имя папки/файла, которое создаёт торрент AniLiberty,
   совпадает с `dn` в magnet-ссылке API — так находится ≈92% релизов без угадывания.
 - **Синхронизация с аккаунтом AniLiberty — у каждого пользователя Jellyfin свой аккаунт:**
   прогресс и «просмотрено» в обе стороны, избранное, коллекции сайта
   («Смотрю», «Запланировано», …) как личные плейлисты. Вход по одноразовому коду, пароль в Jellyfin не вводится.
 - **Франшизы** — коллекции Jellyfin в порядке просмотра с сайта
   (например, «Моя геройская академия»: 1 → 2 → 3 → «Два героя» → 4 → …), сериалы и фильмы вместе.
-- **Один сериал на релиз с выбором версии.** Скрипт [`scripts/anilibria-tree.py`](scripts/anilibria-tree.py)
+- **Один сериал на релиз с выбором версии.** Скрипт [`scripts/aniliberty-tree.py`](scripts/aniliberty-tree.py)
   собирает дерево симлинков, в котором AVC, HEVC и 720p-раздачи одного релиза становятся версиями
   одной серии, а одиночные файлы из корня архива — отдельной медиатекой фильмов.
 
@@ -25,11 +25,11 @@
 | | |
 |---|---|
 | Jellyfin | **12.1** и новее (плагин собран под .NET 10, на 10.x не загрузится) |
-| Архив | торренты AniLibria/AniLiberty **с оригинальными именами папок и файлов** |
+| Архив | торренты AniLiberty **с оригинальными именами папок и файлов** |
 | Для дерева симлинков | Linux-хост или контейнер с Jellyfin, Python 3, systemd (или любой планировщик) |
 | Сеть | доступ к `aniliberty.top` и `shikimori.rip` с сервера Jellyfin ([см. «Россия и Cloudflare»](#россия-и-cloudflare)) |
 
-Переименованные или скачанные не с AniLibria релизы тоже обработаются, но только поиском по названию — это заметно менее точно.
+Переименованные или скачанные не с AniLiberty релизы тоже обработаются, но только поиском по названию — это заметно менее точно.
 
 ## Установка
 
@@ -50,27 +50,27 @@
 Одна карточка на релиз, у каждой серии выбор версии (WEBRip 1080p / 1080p HEVC / 720p), фильмы отдельно.
 
 ```
-/media/anilibria/86 - Eighty Six - AniLibria.TV [WEBRip 1080p]/86_Eighty_Six_[01]_[AniLibria_TV]_[WEBRip_1080p].mkv
-/media/anilibria/86 - Eighty Six - AniLibria.TV [WEBRip 1080p HEVC]/86_Eighty_Six_[01]_..._HEVC].mkv
-/media/anilibria/Fairy_Tail_Dragon_Cry_[AniLibria_TV]_[BDRip_1080p].mkv
-        ↓  anilibria-tree.py
-/srv/anilibria-series/86 - Eighty Six/Season 01/86 - Eighty Six S01E01 - WEBRip 1080p.mkv
-/srv/anilibria-series/86 - Eighty Six/Season 01/86 - Eighty Six S01E01 - WEBRip 1080p HEVC.mkv
-/srv/anilibria-movies/Fairy Tail Dragon Cry/Fairy Tail Dragon Cry - BDRip 1080p.mkv
+/media/aniliberty/86 - Eighty Six - AniLibria.TV [WEBRip 1080p]/86_Eighty_Six_[01]_[AniLibria_TV]_[WEBRip_1080p].mkv
+/media/aniliberty/86 - Eighty Six - AniLibria.TV [WEBRip 1080p HEVC]/86_Eighty_Six_[01]_..._HEVC].mkv
+/media/aniliberty/Fairy_Tail_Dragon_Cry_[AniLibria_TV]_[BDRip_1080p].mkv
+        ↓  aniliberty-tree.py
+/srv/aniliberty-series/86 - Eighty Six/Season 01/86 - Eighty Six S01E01 - WEBRip 1080p.mkv
+/srv/aniliberty-series/86 - Eighty Six/Season 01/86 - Eighty Six S01E01 - WEBRip 1080p HEVC.mkv
+/srv/aniliberty-movies/Fairy Tail Dragon Cry/Fairy Tail Dragon Cry - BDRip 1080p.mkv
 ```
 
 Оригинальные файлы не трогаются (раздача продолжает работать), в дереве только симлинки.
 Установка на хосте/в контейнере, где работает Jellyfin:
 
 ```bash
-sudo install -m 755 scripts/anilibria-tree.py /usr/local/bin/
-sudo install -m 644 scripts/anilibria-tree.service scripts/anilibria-tree.timer /etc/systemd/system/
-sudo mkdir -p /srv/anilibria-series /srv/anilibria-movies
-sudo chown jellyfin:jellyfin /srv/anilibria-series /srv/anilibria-movies
-# при необходимости поправить пути (ANILIBRIA_SOURCE / _SERIES / _MOVIES) и User= в .service
+sudo install -m 755 scripts/aniliberty-tree.py /usr/local/bin/
+sudo install -m 644 scripts/aniliberty-tree.service scripts/aniliberty-tree.timer /etc/systemd/system/
+sudo mkdir -p /srv/aniliberty-series /srv/aniliberty-movies
+sudo chown jellyfin:jellyfin /srv/aniliberty-series /srv/aniliberty-movies
+# при необходимости поправить пути (ANILIBERTY_SOURCE / _SERIES / _MOVIES) и User= в .service
 sudo systemctl daemon-reload
-sudo systemctl start anilibria-tree.service      # первая сборка
-sudo systemctl enable --now anilibria-tree.timer # дальше — раз в час
+sudo systemctl start aniliberty-tree.service      # первая сборка
+sudo systemctl enable --now aniliberty-tree.timer # дальше — раз в час
 ```
 
 Скрипт идемпотентный: добавляет новые релизы и убирает ссылки на исчезнувшие файлы.
@@ -83,8 +83,8 @@ sudo systemctl enable --now anilibria-tree.timer # дальше — раз в ч
 
 | Медиатека | Тип | Папка |
 |---|---|---|
-| Аниме | Телешоу | `/srv/anilibria-series` |
-| Аниме — фильмы | Фильмы | `/srv/anilibria-movies` |
+| Аниме | Телешоу | `/srv/aniliberty-series` |
+| Аниме — фильмы | Фильмы | `/srv/aniliberty-movies` |
 
 ### Вариант Б — прямо на архив
 
@@ -177,7 +177,7 @@ AniLiberty работает за Cloudflare. У многих российски�
 4. Поиск AniLiberty, затем Shikimori: сначала точное совпадение слов названия, затем «все слова запроса
    есть в названии» с минимумом лишних слов; номера сезонов нормализуются (`S2`, `TV2`, `2nd Season` → 2).
 
-Номер серии берётся из тега `[07]` в имени файла AniLibria — штатный парсер Jellyfin путается
+Номер серии берётся из тега `[07]` в имени файла AniLiberty — штатный парсер Jellyfin путается
 на названиях с цифрами (`100-man no Inochi…` → серия 100).
 
 ## Сборка из исходников
@@ -201,7 +201,7 @@ src/Jellyfin.Plugin.AniLiberty/
     AccountClient.cs                 API аккаунта: вход по коду, таймкоды, избранное, коллекции
     ShikimoriClient.cs               запасной источник метаданных (с ограничением частоты)
     ReleaseResolver.cs               сопоставление папки/файла с релизом
-    NameNormalizer.cs                разбор имён AniLibria, номера серий
+    NameNormalizer.cs                разбор имён AniLiberty, номера серий
     Http.cs, Models.cs               HTTP с таймаутами/повторами, модели ответов
   Providers/                         провайдеры метаданных и изображений Jellyfin, правило скрытия
                                      корневых файлов, исправление номеров серий
@@ -215,7 +215,7 @@ src/Jellyfin.Plugin.AniLiberty/
   Web/
     AccountController.cs, link.html  страница и API привязки аккаунта
 scripts/
-  anilibria-tree.py (+ .service, .timer)  дерево симлинков для медиатек
+  aniliberty-tree.py (+ .service, .timer)  дерево симлинков для медиатек
 manifest.json                        репозиторий плагинов для Jellyfin
 .github/                             сборка релизов
 ```
