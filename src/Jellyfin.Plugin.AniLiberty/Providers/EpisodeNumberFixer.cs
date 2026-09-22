@@ -15,20 +15,23 @@ public sealed class EpisodeNumberFixer : ICustomMetadataProvider<Episode>, IPreR
 
     public Task<ItemUpdateType> FetchAsync(Episode item, MetadataRefreshOptions options, CancellationToken cancellationToken)
     {
-        if (NameNormalizer.BracketEpisodeNumber(item.Path) is not { } number)
+        var update = ItemUpdateType.None;
+
+        // Files sit directly in the release folder; without a season Jellyfin files them under "Season unknown".
+        if (item.ParentIndexNumber is null && item.Series is { } series
+            && string.Equals(Path.GetDirectoryName(item.Path), series.Path?.TrimEnd('/'), StringComparison.Ordinal))
         {
-            return Task.FromResult(ItemUpdateType.None);
+            item.ParentIndexNumber = 1;
+            update = ItemUpdateType.MetadataEdit;
         }
 
-        var index = (int)Math.Floor(number);
-        if (item.IndexNumber == index)
+        if (NameNormalizer.BracketEpisodeNumber(item.Path) is { } number && item.IndexNumber != (int)Math.Floor(number))
         {
-            return Task.FromResult(ItemUpdateType.None);
+            item.IndexNumber = (int)Math.Floor(number);
+            item.IndexNumberEnd = null;
+            update = ItemUpdateType.MetadataEdit;
         }
 
-        item.IndexNumber = index;
-        item.IndexNumberEnd = null;
-        item.ParentIndexNumber ??= 1;
-        return Task.FromResult(ItemUpdateType.MetadataEdit);
+        return Task.FromResult(update);
     }
 }
