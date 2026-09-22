@@ -20,4 +20,10 @@ public class PluginConfiguration : BasePluginConfiguration
 
     /// <summary>How often the torrent-name index is re-downloaded.</summary>
     public int TorrentIndexRefreshHours { get; set; } = 24;
+
+    /// <summary>Default interval of the account sync task (users can still change the trigger in Scheduled tasks).</summary>
+    public int AccountSyncIntervalMinutes { get; set; } = 15;
+
+    /// <summary>Which twin of a release (AVC or HEVC folder) goes into the collection playlists.</summary>
+    public bool PreferHevcInPlaylists { get; set; } = true;
 }

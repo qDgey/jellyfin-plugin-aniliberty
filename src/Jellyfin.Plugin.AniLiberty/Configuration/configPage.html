@@ -12,6 +12,9 @@
                 <div class="sectionTitleContainer flex align-items-center">
                     <h2 class="sectionTitle">AniLiberty Metadata</h2>
                 </div>
+                <p>Привязка аккаунтов AniLiberty для синхронизации просмотров — у каждого пользователя своя:
+                    <a is="emby-linkbutton" class="button-link" href="/AniLiberty/Link" target="_blank">/AniLiberty/Link</a>.
+                    Дайте эту ссылку пользователям; открывать в браузере, где выполнен вход в Jellyfin.</p>
                 <div class="inputContainer">
                     <input is="emby-input" type="text" id="SiteUrl" label="Адрес AniLiberty" />
                     <div class="fieldDescription">API берётся из /api/v1. Зеркала: https://aniliberty.top, https://anilibria.top</div>
@@ -37,6 +40,12 @@
                         <span>Добавлять команду озвучки в «Люди»</span>
                     </label>
                 </div>
+                <div class="checkboxContainer">
+                    <label>
+                        <input is="emby-checkbox" type="checkbox" id="PreferHevcInPlaylists" />
+                        <span>В плейлисты коллекций добавлять HEVC-версию релиза</span>
+                    </label>
+                </div>
                 <div class="inputContainer">
                     <input is="emby-input" type="number" id="TorrentIndexRefreshHours" min="1" label="Обновлять индекс торрентов, часов" />
                 </div>
@@ -51,7 +60,7 @@
             var pluginId = '5b7c3f7e-2c1a-4d7e-9a57-7a1b0c0de001';
             var page = document.querySelector('#aniLibertyConfigPage');
             var text = ['SiteUrl', 'ShikimoriUrl', 'TorrentIndexRefreshHours'];
-            var bool = ['EnableShikimoriFallback', 'PreferEnglishTitle', 'ImportTeam'];
+            var bool = ['EnableShikimoriFallback', 'PreferEnglishTitle', 'ImportTeam', 'PreferHevcInPlaylists'];
 
             page.addEventListener('pageshow', function () {
                 Dashboard.showLoadingMsg();
