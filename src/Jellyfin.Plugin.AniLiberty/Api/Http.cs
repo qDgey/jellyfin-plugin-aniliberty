@@ -48,7 +48,7 @@ internal static class Http
     private static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(10);
 
     /// <summary>GET JSON; returns default on 404, retries on 429/5xx and stalled responses.</summary>
-    public static async Task<T?> GetJsonAsync<T>(HttpClient client, string url, CancellationToken ct)
+    public static async Task<T?> GetJsonAsync<T>(HttpClient client, string url, CancellationToken ct, int retries = 3)
     {
         for (var attempt = 0; ; attempt++)
         {
@@ -72,7 +72,7 @@ internal static class Http
                     return default;
                 }
 
-                if ((resp.StatusCode == HttpStatusCode.TooManyRequests || (int)resp.StatusCode >= 500) && attempt < 3)
+                if ((resp.StatusCode == HttpStatusCode.TooManyRequests || (int)resp.StatusCode >= 500) && attempt < retries)
                 {
                     var delay = resp.Headers.RetryAfter?.Delta ?? TimeSpan.FromSeconds(2 << attempt);
                     await Task.Delay(delay, ct).ConfigureAwait(false);
@@ -100,7 +100,7 @@ internal static class Http
                 return await JsonSerializer.DeserializeAsync<T>(stream, Json, cts.Token).ConfigureAwait(false);
             }
             catch (Exception ex) when (ex is OperationCanceledException or HttpRequestException or IOException
-                                       && !ct.IsCancellationRequested && attempt < 3)
+                                       && !ct.IsCancellationRequested && attempt < retries)
             {
                 await Task.Delay(TimeSpan.FromSeconds(1 << attempt), ct).ConfigureAwait(false);
             }

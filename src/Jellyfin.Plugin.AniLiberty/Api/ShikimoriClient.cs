@@ -9,6 +9,12 @@ public sealed partial class ShikimoriClient
     // Shikimori allows 5 rps / 90 rpm.
     private static readonly TimeSpan MinInterval = TimeSpan.FromMilliseconds(700);
 
+    // Most Shikimori domains sit behind Cloudflare, which some networks can't reach; shikimori.io is direct.
+    // The configured address is tried first, then the rest, and the working one is remembered.
+    private static readonly string[] Mirrors = { "https://shikimori.rip", "https://shikimori.io", "https://shikimori.one" };
+
+    private static string? _workingMirror;
+
     private readonly IHttpClientFactory _httpFactory;
     private readonly SemaphoreSlim _throttle = new(1, 1);
     private readonly ConcurrentDictionary<long, ShikiAnime?> _details = new();
@@ -19,7 +25,24 @@ public sealed partial class ShikimoriClient
         _httpFactory = httpFactory;
     }
 
-    public static string SiteUrl => (Plugin.Instance?.Configuration.ShikimoriUrl ?? "https://shikimori.rip").TrimEnd('/');
+    /// <summary>Address links are built with: the one that answered last, else the configured one.</summary>
+    public static string SiteUrl => _workingMirror ?? Configured;
+
+    private static string Configured => (Plugin.Instance?.Configuration.ShikimoriUrl ?? Mirrors[0]).TrimEnd('/');
+
+    private static IEnumerable<string> Candidates()
+    {
+        if (_workingMirror is { } working)
+        {
+            yield return working;
+        }
+
+        yield return Configured;
+        foreach (var mirror in Mirrors)
+        {
+            yield return mirror;
+        }
+    }
 
     public static string? ImageUrl(ShikiImage? image)
     {
@@ -39,8 +62,8 @@ public sealed partial class ShikimoriClient
             return Array.Empty<ShikiAnime>();
         }
 
-        var url = $"{SiteUrl}/api/animes?search={Uri.EscapeDataString(query)}&limit=10&censored=false";
-        return await GetAsync<List<ShikiAnime>>(url, ct).ConfigureAwait(false) ?? new List<ShikiAnime>();
+        var path = $"/api/animes?search={Uri.EscapeDataString(query)}&limit=10&censored=false";
+        return await GetAsync<List<ShikiAnime>>(path, ct).ConfigureAwait(false) ?? new List<ShikiAnime>();
     }
 
     public async Task<ShikiAnime?> GetAsync(long id, CancellationToken ct)
@@ -50,7 +73,7 @@ public sealed partial class ShikimoriClient
             return cached;
         }
 
-        var anime = await GetAsync<ShikiAnime>($"{SiteUrl}/api/animes/{id}", ct).ConfigureAwait(false);
+        var anime = await GetAsync<ShikiAnime>($"/api/animes/{id}", ct).ConfigureAwait(false);
         if (anime is not null && anime.Genres is not { Count: > 0 })
         {
             // Some mirrors (shikimori.rip) leave genres out of the REST answer; GraphQL still has them.
@@ -121,7 +144,8 @@ public sealed partial class ShikimoriClient
     [GeneratedRegex(@"\[/?[a-z_]+(?:=[^\]]*)?\]", RegexOptions.IgnoreCase)]
     private static partial Regex BbCode();
 
-    private async Task<T?> GetAsync<T>(string url, CancellationToken ct)
+    /// <summary>GET a path from the first mirror that answers.</summary>
+    private async Task<T?> GetAsync<T>(string path, CancellationToken ct)
     {
         await _throttle.WaitAsync(ct).ConfigureAwait(false);
         try
@@ -132,14 +156,33 @@ public sealed partial class ShikimoriClient
                 await Task.Delay(wait, ct).ConfigureAwait(false);
             }
 
-            try
+            var client = _httpFactory.CreateClient(MediaBrowser.Common.Net.NamedClient.Default);
+            Exception? last = null;
+            foreach (var mirror in Candidates().Distinct())
             {
-                return await Http.GetJsonAsync<T>(_httpFactory.CreateClient(MediaBrowser.Common.Net.NamedClient.Default), url, ct).ConfigureAwait(false);
+                try
+                {
+                    // No retries here: a blocked mirror should fail fast so the next one is tried.
+                    var result = await Http.GetJsonAsync<T>(client, mirror + path, ct, retries: 0).ConfigureAwait(false);
+                    _workingMirror = mirror;
+                    return result;
+                }
+                catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException && !ct.IsCancellationRequested)
+                {
+                    // Unreachable mirror (blocked Cloudflare address, DNS, timeout): try the next one.
+                    last = ex;
+                    if (_workingMirror == mirror)
+                    {
+                        _workingMirror = null;
+                    }
+                }
+                finally
+                {
+                    _last = DateTime.UtcNow;
+                }
             }
-            finally
-            {
-                _last = DateTime.UtcNow;
-            }
+
+            throw last ?? new HttpRequestException("No Shikimori mirror answered");
         }
         finally
         {
