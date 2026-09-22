@@ -11,6 +11,9 @@ public sealed class ReleaseResolver
 {
     private static readonly string[] MovieKinds = { "movie" };
 
+    // Not releases anyone has in a library: trailers and music videos Shikimori lists next to the real entries.
+    private static readonly string[] NotContentKinds = { "pv", "cm", "music" };
+
     private readonly AniLibertyClient _aniliberty;
     private readonly ShikimoriClient _shikimori;
     private readonly ILogger<ReleaseResolver> _logger;
@@ -60,22 +63,23 @@ public sealed class ReleaseResolver
             // Same-words matches on either site beat looser ones: AniLiberty search happily returns
             // spin-offs and sequels ("Shingeki! Kyojin Chuugakkou" for "Shingeki no Kyojin").
             var alHits = await _aniliberty.SearchAsync(query, ct).ConfigureAwait(false);
-            var shHits = fallback ? await _shikimori.SearchAsync(query, ct).ConfigureAwait(false) : Array.Empty<ShikiAnime>();
+            IReadOnlyList<ShikiAnime> shHits = fallback ? await ShikimoriCandidatesAsync(query, ct).ConfigureAwait(false) : Array.Empty<ShikiAnime>();
             Func<Release, bool> alKind = r => isMovie == string.Equals(r.Type?.Value, "MOVIE", StringComparison.OrdinalIgnoreCase);
             Func<Release, bool> alYear = r => info.Year is null || r.Year == info.Year;
             Func<ShikiAnime, bool> shKind = a => isMovie == MovieKinds.Contains(a.Kind ?? string.Empty);
+            shHits = shHits.Where(a => !NotContentKinds.Contains(a.Kind ?? string.Empty)).ToList();
             Func<ShikiAnime, bool> shYear = a => info.Year is null || AiredYear(a) == info.Year;
 
             foreach (var loose in new[] { false, true })
             {
-                if (Pick(alHits, query, Titles, alKind, alYear, loose) is { } al
+                if (Pick(alHits, query, Titles, alKind, alYear, loose, trustSingleHit: false) is { } al
                     && await _aniliberty.GetReleaseAsync(al.Id, ct).ConfigureAwait(false) is { } release)
                 {
                     _logger.LogDebug("AniLiberty: {Query} matched by search → release {Id}", query, release.Id);
                     return new Match(release, null);
                 }
 
-                if (Pick(shHits, query, Titles, shKind, shYear, loose) is { } sh)
+                if (Pick(shHits, query, Titles, shKind, shYear, loose, trustSingleHit: true) is { } sh)
                 {
                     _logger.LogDebug("AniLiberty: {Query} matched on Shikimori → {Id}", query, sh.Id);
                     return new Match(null, await _shikimori.GetAsync(sh.Id, ct).ConfigureAwait(false) ?? sh);
@@ -197,6 +201,30 @@ public sealed class ReleaseResolver
         }
     }
 
+    /// <summary>
+    /// Shikimori's search results only carry the main title, so a romaji-only database entry never matches an
+    /// English folder name. Load the details of the first few hits, which include english titles and synonyms.
+    /// </summary>
+    private async Task<IReadOnlyList<ShikiAnime>> ShikimoriCandidatesAsync(string query, CancellationToken ct)
+    {
+        var hits = await _shikimori.SearchAsync(query, ct).ConfigureAwait(false);
+        var result = new List<ShikiAnime>(hits.Count);
+        foreach (var hit in hits.Take(5))
+        {
+            result.Add(await _shikimori.GetAsync(hit.Id, ct).ConfigureAwait(false) ?? hit);
+        }
+
+        result.AddRange(hits.Skip(5));
+
+        // An abbreviation the databases don't know ("Watatabe") still resolves when the site is sure.
+        if (result.Count == 1)
+        {
+            _logger.LogDebug("AniLiberty: {Query} has a single Shikimori hit {Id}", query, result[0].Id);
+        }
+
+        return result;
+    }
+
     private static string? LinkTarget(string path)
     {
         try
@@ -219,7 +247,14 @@ public sealed class ReleaseResolver
     /// Within each tier the expected kind (movie vs series) and year are preferred, not required:
     /// the movie library also holds OVAs and specials.
     /// </summary>
-    internal static T? Pick<T>(IReadOnlyList<T> hits, string query, Func<T, IEnumerable<string>> titles, Func<T, bool> kindOk, Func<T, bool> yearOk, bool loose)
+    internal static T? Pick<T>(
+        IReadOnlyList<T> hits,
+        string query,
+        Func<T, IEnumerable<string>> titles,
+        Func<T, bool> kindOk,
+        Func<T, bool> yearOk,
+        bool loose,
+        bool trustSingleHit)
         where T : class
     {
         var q = NameNormalizer.Tokens(query);
@@ -231,7 +266,15 @@ public sealed class ReleaseResolver
         IEnumerable<T> candidates;
         if (!loose)
         {
-            candidates = hits.Where(x => titles(x).Any(t => NameNormalizer.Tokens(t).SetEquals(q)));
+            // Closest first: a query without a season number should land on the season without one.
+            candidates = hits
+                .Where(x => titles(x).Any(t => NameNormalizer.SameTitle(t, query)))
+                .OrderBy(x => titles(x).Select(t => Math.Abs(NameNormalizer.Tokens(t).Count - q.Count)).DefaultIfEmpty(0).Min());
+        }
+        else if (trustSingleHit && hits.Count == 1)
+        {
+            // The database knows exactly one title for this query: trust it (AniLiberty abbreviates names).
+            candidates = hits;
         }
         else
         {

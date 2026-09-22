@@ -51,19 +51,54 @@ public static partial class NameNormalizer
     private static readonly HashSet<string> StopWords = new(StringComparer.Ordinal)
     {
         "the", "a", "no", "movie", "film", "gekijouban", "gekijououban", "ova", "ona", "oad", "special", "specials", "tv", "bd", "season",
+
+        // Release/quality words (see QualityWords).
+        "bdrip", "webrip", "hdtvrip", "dvdrip", "webdl", "web", "dl", "rip", "hdtv", "dvd", "blu", "ray",
+        "hevc", "avc", "x264", "x265", "h264", "h265", "10bit", "hdr", "lq",
     };
 
-    /// <summary>Significant words of a title for order-insensitive comparison.</summary>
-    public static HashSet<string> Tokens(string? name)
+    /// <summary>Release info some folders spell inline instead of in brackets ("Shingeki_no_Kyojin_BD-Rip_720p").</summary>
+    private static readonly HashSet<string> QualityWords = new(StringComparer.Ordinal)
     {
-        // "S2", "TV2", "2nd Season", "Season 2" all mean sequel number 2.
-        var words = Clean(name).Split(' ', StringSplitOptions.RemoveEmptyEntries)
+        "bdrip", "webrip", "hdtvrip", "dvdrip", "webdl", "web", "dl", "rip", "hdtv", "dvd", "blu", "ray",
+        "hevc", "avc", "x264", "x265", "h264", "h265", "10bit", "hdr", "lq", "bd",
+    };
+
+    // "Shiguang Dailiren II" is season 2.
+    private static readonly Dictionary<string, string> RomanNumbers = new(StringComparer.Ordinal)
+    {
+        ["ii"] = "2", ["iii"] = "3", ["iv"] = "4", ["v"] = "5", ["vi"] = "6", ["vii"] = "7", ["viii"] = "8",
+    };
+
+    /// <summary>Significant words of a title, in order: stop words dropped, sequel numbers normalized.</summary>
+    private static string[] Words(string? name)
+    {
+        // "S2", "TV2", "2nd Season", "Season 2", "II" all mean sequel number 2.
+        var words = Clean(name).Replace('-', ' ').Split(' ', StringSplitOptions.RemoveEmptyEntries)
+            .Select(w => RomanNumbers.TryGetValue(w, out var digit) ? digit : w)
             .Select(w => SequelNumber().Match(w) is { Success: true } m ? m.Groups[1].Value.TrimStart('0') : w)
             .Where(w => w.Length > 0)
             .ToArray();
-        var set = new HashSet<string>(words.Where(w => !StopWords.Contains(w)), StringComparer.Ordinal);
-        return set.Count > 0 ? set : new HashSet<string>(words, StringComparer.Ordinal);
+        var significant = words.Where(w => !StopWords.Contains(w)).ToArray();
+        return significant.Length > 0 ? significant : words;
     }
+
+    /// <summary>Significant words of a title for order-insensitive comparison.</summary>
+    public static HashSet<string> Tokens(string? name) => new(Words(name), StringComparer.Ordinal);
+
+    /// <summary>
+    /// True when two titles are the same, also when a database spells the words differently than AniLiberty
+    /// ("Watashi ga Motete Dou Sunda" = "Watashi ga Motete Dousunda",
+    /// "Dai Dai Dai Dai Daisuki" = "Daidaidaidaidaisuki").
+    /// </summary>
+    public static bool SameTitle(string? a, string? b)
+    {
+        return Tokens(a).SetEquals(Tokens(b)) || (Glued(a).Length > 0 && Glued(a) == Glued(b));
+    }
+
+    // Word boundaries differ between databases ("Daidaidaidaidaisuki" vs "Dai Dai Dai Dai Daisuki"),
+    // so compare the significant words glued together.
+    private static string Glued(string? name) => string.Concat(Words(name));
 
     /// <summary>Human-readable search query derived from a folder/file name.</summary>
     public static string SearchQuery(string? name)
@@ -76,7 +111,19 @@ public static partial class NameNormalizer
         var s = VideoExtension().Replace(name.Trim(), string.Empty).Replace('_', ' ');
         s = GroupTag().Split(s)[0];
         s = Brackets().Replace(s, " ");
-        return Regex.Replace(s, @"\s+", " ").Trim(' ', '-', '.');
+
+        // Searching for the release info finds nothing, so drop it — but keep ordinary words like "no".
+        var words = Regex.Split(s, @"\s+")
+            .Where(w => w.Length > 0 && !IsQuality(NonWord().Replace(w.ToLowerInvariant(), " ").Trim()))
+            .ToArray();
+        return string.Join(' ', words.Length > 0 ? words : Regex.Split(s, @"\s+")).Trim(' ', '-', '.');
+    }
+
+    private static bool IsQuality(string word)
+    {
+        return QualityWords.Contains(word)
+               || Regex.IsMatch(word, @"^\d{3,4}[pi]$", RegexOptions.IgnoreCase)
+               || word.Split(' ').All(w => w.Length > 0 && QualityWords.Contains(w));
     }
 
     /// <summary>Episode number from the AniLiberty "[07]" tag only; null when the file doesn't follow that convention.</summary>
