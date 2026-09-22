@@ -57,7 +57,7 @@ public sealed class TitleImageProvider : IRemoteImageProvider, IHasOrder
 
     public Task<HttpResponseMessage> GetImageResponse(string url, CancellationToken cancellationToken)
     {
-        return _httpFactory.CreateClient(NamedClient.Default).GetAsync(url, cancellationToken);
+        return Http.GetImageAsync(_httpFactory, url, cancellationToken);
     }
 
     private static bool TryId(BaseItem item, string key, out long id)
@@ -107,6 +107,6 @@ public sealed class EpisodeImageProvider : IRemoteImageProvider, IHasOrder
 
     public Task<HttpResponseMessage> GetImageResponse(string url, CancellationToken cancellationToken)
     {
-        return _httpFactory.CreateClient(NamedClient.Default).GetAsync(url, cancellationToken);
+        return Http.GetImageAsync(_httpFactory, url, cancellationToken);
     }
 }

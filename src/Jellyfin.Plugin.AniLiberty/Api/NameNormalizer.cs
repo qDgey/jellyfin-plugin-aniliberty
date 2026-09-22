@@ -16,6 +16,9 @@ public static partial class NameNormalizer
     [GeneratedRegex(@"\[[^\]]*\]|\([^)]*\)")]
     private static partial Regex Brackets();
 
+    [GeneratedRegex(@"^(?:s|tv|season)?(\d{1,2})(?:st|nd|rd|th)?$")]
+    private static partial Regex SequelNumber();
+
     [GeneratedRegex(@"[^\p{L}\p{N}]+")]
     private static partial Regex NonWord();
 
@@ -42,6 +45,24 @@ public static partial class NameNormalizer
         s = Brackets().Replace(s, " ");
         s = RemoveDiacritics(s);
         return NonWord().Replace(s.ToLowerInvariant(), " ").Trim();
+    }
+
+    // Words that differ between AniLibria file names and database titles without changing the title.
+    private static readonly HashSet<string> StopWords = new(StringComparer.Ordinal)
+    {
+        "the", "a", "no", "movie", "film", "gekijouban", "gekijououban", "ova", "ona", "oad", "special", "specials", "tv", "bd", "season",
+    };
+
+    /// <summary>Significant words of a title for order-insensitive comparison.</summary>
+    public static HashSet<string> Tokens(string? name)
+    {
+        // "S2", "TV2", "2nd Season", "Season 2" all mean sequel number 2.
+        var words = Clean(name).Split(' ', StringSplitOptions.RemoveEmptyEntries)
+            .Select(w => SequelNumber().Match(w) is { Success: true } m ? m.Groups[1].Value.TrimStart('0') : w)
+            .Where(w => w.Length > 0)
+            .ToArray();
+        var set = new HashSet<string>(words.Where(w => !StopWords.Contains(w)), StringComparer.Ordinal);
+        return set.Count > 0 ? set : new HashSet<string>(words, StringComparer.Ordinal);
     }
 
     /// <summary>Human-readable search query derived from a folder/file name.</summary>

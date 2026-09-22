@@ -76,7 +76,7 @@ public sealed class EpisodeProvider : IRemoteMetadataProvider<Episode, EpisodeIn
 
     public Task<HttpResponseMessage> GetImageResponse(string url, CancellationToken cancellationToken)
     {
-        return _httpFactory.CreateClient(NamedClient.Default).GetAsync(url, cancellationToken);
+        return Http.GetImageAsync(_httpFactory, url, cancellationToken);
     }
 
     internal async Task<ReleaseEpisode?> FindAsync(EpisodeInfo info, double number, CancellationToken ct)

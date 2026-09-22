@@ -57,20 +57,28 @@ public sealed class ReleaseResolver
 
         foreach (var query in names.Select(NameNormalizer.SearchQuery).Where(q => q.Length > 0).Distinct())
         {
-            var release = await SearchAniLibertyAsync(query, info.Year, ct).ConfigureAwait(false);
-            if (release is not null)
-            {
-                _logger.LogDebug("AniLiberty: {Query} matched by search → release {Id}", query, release.Id);
-                return new Match(release, null);
-            }
+            // Same-words matches on either site beat looser ones: AniLiberty search happily returns
+            // spin-offs and sequels ("Shingeki! Kyojin Chuugakkou" for "Shingeki no Kyojin").
+            var alHits = await _aniliberty.SearchAsync(query, ct).ConfigureAwait(false);
+            var shHits = fallback ? await _shikimori.SearchAsync(query, ct).ConfigureAwait(false) : Array.Empty<ShikiAnime>();
+            Func<Release, bool> alKind = r => isMovie == string.Equals(r.Type?.Value, "MOVIE", StringComparison.OrdinalIgnoreCase);
+            Func<Release, bool> alYear = r => info.Year is null || r.Year == info.Year;
+            Func<ShikiAnime, bool> shKind = a => isMovie == MovieKinds.Contains(a.Kind ?? string.Empty);
+            Func<ShikiAnime, bool> shYear = a => info.Year is null || AiredYear(a) == info.Year;
 
-            if (fallback)
+            foreach (var loose in new[] { false, true })
             {
-                var shiki = await SearchShikimoriAsync(query, info.Year, isMovie, ct).ConfigureAwait(false);
-                if (shiki is not null)
+                if (Pick(alHits, query, Titles, alKind, alYear, loose) is { } al
+                    && await _aniliberty.GetReleaseAsync(al.Id, ct).ConfigureAwait(false) is { } release)
                 {
-                    _logger.LogDebug("AniLiberty: {Query} matched on Shikimori → {Id}", query, shiki.Id);
-                    return new Match(null, await _shikimori.GetAsync(shiki.Id, ct).ConfigureAwait(false) ?? shiki);
+                    _logger.LogDebug("AniLiberty: {Query} matched by search → release {Id}", query, release.Id);
+                    return new Match(release, null);
+                }
+
+                if (Pick(shHits, query, Titles, shKind, shYear, loose) is { } sh)
+                {
+                    _logger.LogDebug("AniLiberty: {Query} matched on Shikimori → {Id}", query, sh.Id);
+                    return new Match(null, await _shikimori.GetAsync(sh.Id, ct).ConfigureAwait(false) ?? sh);
                 }
             }
         }
@@ -158,34 +166,44 @@ public sealed class ReleaseResolver
         }
     }
 
-    private async Task<Release?> SearchAniLibertyAsync(string query, int? year, CancellationToken ct)
+    /// <summary>
+    /// Best search hit for a file-derived query, most to least certain: same words, then the query's words
+    /// being a subset of the title ("Fairy Tail Dragon Cry" in "Fairy Tail Movie 2: Dragon Cry").
+    /// Within each tier the expected kind (movie vs series) and year are preferred, not required:
+    /// the movie library also holds OVAs and specials.
+    /// </summary>
+    internal static T? Pick<T>(IReadOnlyList<T> hits, string query, Func<T, IEnumerable<string>> titles, Func<T, bool> kindOk, Func<T, bool> yearOk, bool loose)
+        where T : class
     {
-        var key = NameNormalizer.Clean(query);
-        var hits = (await _aniliberty.SearchAsync(query, ct).ConfigureAwait(false))
-            .Where(r => Titles(r).Any(t => NameNormalizer.Clean(t) == key))
-            .ToList();
-        var best = hits.FirstOrDefault(r => year is null || r.Year == year) ?? hits.FirstOrDefault();
-        return best is null ? null : await _aniliberty.GetReleaseAsync(best.Id, ct).ConfigureAwait(false);
-    }
-
-    private async Task<ShikiAnime?> SearchShikimoriAsync(string query, int? year, bool isMovie, CancellationToken ct)
-    {
-        var key = NameNormalizer.Clean(query);
-        var hits = await _shikimori.SearchAsync(query, ct).ConfigureAwait(false);
-        if (hits.Count == 0)
+        var q = NameNormalizer.Tokens(query);
+        if (q.Count == 0 || hits.Count == 0)
         {
             return null;
         }
 
-        bool KindOk(ShikiAnime a) => isMovie == MovieKinds.Contains(a.Kind ?? string.Empty);
-        bool YearOk(ShikiAnime a) => year is null || AiredYear(a) == year;
-        bool Exact(ShikiAnime a) => Titles(a).Any(t => NameNormalizer.Clean(t) == key);
+        IEnumerable<T> candidates;
+        if (!loose)
+        {
+            candidates = hits.Where(x => titles(x).Any(t => NameNormalizer.Tokens(t).SetEquals(q)));
+        }
+        else
+        {
+            // A one-word query ("Charlotte") is too weak to accept a longer title.
+            if (q.Count < 2)
+            {
+                return null;
+            }
 
-        return hits.FirstOrDefault(a => Exact(a) && KindOk(a) && YearOk(a))
-               ?? hits.FirstOrDefault(a => Exact(a) && KindOk(a))
-               ?? hits.FirstOrDefault(Exact)
-               // Shikimori's own ranking is good; only trust it when the title at least starts with the query.
-               ?? hits.FirstOrDefault(a => KindOk(a) && Titles(a).Any(t => NameNormalizer.Clean(t).StartsWith(key, StringComparison.Ordinal)));
+            // Fewest extra words first, so "Ghost in the Shell" prefers the film over "... Arise".
+            candidates = hits
+                .Select(x => (Item: x, Extra: titles(x).Select(NameNormalizer.Tokens).Where(q.IsSubsetOf).Select(t => t.Count - q.Count).DefaultIfEmpty(-1).Max()))
+                .Where(c => c.Extra >= 0)
+                .OrderBy(c => c.Extra)
+                .Select(c => c.Item);
+        }
+
+        var list = candidates.ToList();
+        return list.FirstOrDefault(x => kindOk(x) && yearOk(x)) ?? list.FirstOrDefault(kindOk) ?? list.FirstOrDefault();
     }
 
     public static IEnumerable<string> Titles(Release r)
