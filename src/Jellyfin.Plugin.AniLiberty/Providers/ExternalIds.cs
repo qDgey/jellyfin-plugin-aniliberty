@@ -32,6 +32,17 @@ public sealed class ShikimoriExternalId : IExternalId
 
 // Jellyfin labels every link with its provider's Name, so each site needs its own provider.
 
+public sealed class MyAnimeListExternalId : IExternalId
+{
+    public string ProviderName => "MyAnimeList";
+
+    public string Key => Plugin.MalKey;
+
+    public ExternalIdMediaType? Type => null;
+
+    public bool Supports(IHasProviderIds item) => item is Series or Movie;
+}
+
 public sealed class ExternalUrlProvider : IExternalUrlProvider
 {
     public string Name => Plugin.ProviderName;
@@ -54,6 +65,19 @@ public sealed class ShikimoriExternalUrlProvider : IExternalUrlProvider
         if (item is Series or Movie && item.TryGetProviderId(Plugin.ShikimoriKey, out var id))
         {
             yield return ShikimoriClient.SiteUrl + "/animes/" + id;
+        }
+    }
+}
+
+public sealed class MyAnimeListExternalUrlProvider : IExternalUrlProvider
+{
+    public string Name => "MyAnimeList";
+
+    public IEnumerable<string> GetExternalUrls(BaseItem item)
+    {
+        if (item is Series or Movie && item.TryGetProviderId(Plugin.MalKey, out var id))
+        {
+            yield return "https://myanimelist.net/anime/" + id;
         }
     }
 }
