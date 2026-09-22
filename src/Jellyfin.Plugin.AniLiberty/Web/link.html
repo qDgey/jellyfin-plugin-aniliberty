@@ -108,7 +108,14 @@
       if (r.status === 401) { throw { auth: true }; }
       if (!r.ok) { throw new Error('Ошибка ' + r.status); }
       return r.json();
-    });
+    }).then(camel);
+  }
+
+  // Jellyfin serializes PascalCase ("PendingCode"); the page reads camelCase.
+  function camel(o) {
+    var out = {};
+    Object.keys(o || {}).forEach(function (k) { out[k.charAt(0).toLowerCase() + k.slice(1)] = o[k]; });
+    return out;
   }
 
   function fmt(date) {
