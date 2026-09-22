@@ -14,8 +14,9 @@ namespace Jellyfin.Plugin.AniLiberty.Sync;
 /// <summary>
 /// Mirrors AniLiberty franchises as Jellyfin collections: seasons, movies and OVAs of one title in the site's
 /// watch order ("Моя геройская академия" 1 → 2 → 3 → «Два героя» → 4 …). Collections are shared by all users.
+/// Run daily by <see cref="FranchiseTask"/> and after every library scan by <see cref="FranchisePostScanTask"/>.
 /// </summary>
-public sealed class FranchiseTask : IScheduledTask
+public sealed class FranchiseBuilder
 {
     public const string FranchiseKey = "AniLibertyFranchise";
 
@@ -27,15 +28,16 @@ public sealed class FranchiseTask : IScheduledTask
     private readonly ILibraryManager _library;
     private readonly ICollectionManager _collections;
     private readonly IProviderManager _providers;
-    private readonly ILogger<FranchiseTask> _logger;
+    private readonly ILogger<FranchiseBuilder> _logger;
+    private readonly SemaphoreSlim _running = new(1, 1);
 
-    public FranchiseTask(
+    public FranchiseBuilder(
         AniLibertyClient client,
         LibraryIndex index,
         ILibraryManager library,
         ICollectionManager collections,
         IProviderManager providers,
-        ILogger<FranchiseTask> logger)
+        ILogger<FranchiseBuilder> logger)
     {
         _client = client;
         _index = index;
@@ -45,15 +47,26 @@ public sealed class FranchiseTask : IScheduledTask
         _logger = logger;
     }
 
-    public string Name => "Франшизы AniLiberty";
+    public async Task RunAsync(IProgress<double> progress, CancellationToken cancellationToken)
+    {
+        // The daily task and the post-scan hook can overlap; one pass is enough.
+        if (!await _running.WaitAsync(0, cancellationToken).ConfigureAwait(false))
+        {
+            progress.Report(100);
+            return;
+        }
 
-    public string Key => "AniLibertyFranchises";
+        try
+        {
+            await BuildAsync(progress, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            _running.Release();
+        }
+    }
 
-    public string Description => "Коллекции из франшиз AniLiberty: сезоны, фильмы и OVA в порядке просмотра.";
-
-    public string Category => "AniLiberty";
-
-    public async Task ExecuteAsync(IProgress<double> progress, CancellationToken cancellationToken)
+    private async Task BuildAsync(IProgress<double> progress, CancellationToken cancellationToken)
     {
         _index.Invalidate();
         var index = await _index.GetAsync(cancellationToken).ConfigureAwait(false);
@@ -111,15 +124,6 @@ public sealed class FranchiseTask : IScheduledTask
         progress.Report(100);
     }
 
-    public IEnumerable<TaskTriggerInfo> GetDefaultTriggers()
-    {
-        yield return new TaskTriggerInfo
-        {
-            Type = TaskTriggerInfoType.DailyTrigger,
-            TimeOfDayTicks = TimeSpan.FromHours(5).Ticks,
-        };
-    }
-
     // Episode/movie versions merged into one item keep their other files as separate items pointing to the primary.
     private static bool IsPrimaryVersion(BaseItem item) => item is not Video { PrimaryVersionId: not null };
 
@@ -173,11 +177,68 @@ public sealed class FranchiseTask : IScheduledTask
 
         try
         {
-            await _providers.SaveImage(boxSet, url, ImageType.Primary, null, ct).ConfigureAwait(false);
+            // A poster saved earlier may not be registered on the item yet: register it instead of downloading again.
+            var existing = string.IsNullOrEmpty(boxSet.Path) ? null
+                : Directory.EnumerateFiles(boxSet.Path, "folder.*").FirstOrDefault();
+            if (existing is not null)
+            {
+                boxSet.SetImagePath(ImageType.Primary, existing);
+            }
+            else
+            {
+                await _providers.SaveImage(boxSet, url, ImageType.Primary, null, ct).ConfigureAwait(false);
+            }
+
+            await boxSet.UpdateToRepositoryAsync(ItemUpdateType.ImageUpdate, ct).ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is HttpRequestException or IOException or TaskCanceledException && !ct.IsCancellationRequested)
         {
             _logger.LogWarning(ex, "AniLiberty: poster for franchise {Name} failed", franchise.Name);
         }
     }
+}
+
+/// <summary>Scheduled entry point (Dashboard → Scheduled tasks → AniLiberty).</summary>
+public sealed class FranchiseTask : IScheduledTask
+{
+    private readonly FranchiseBuilder _builder;
+
+    public FranchiseTask(FranchiseBuilder builder)
+    {
+        _builder = builder;
+    }
+
+    public string Name => "Франшизы AniLiberty";
+
+    public string Key => "AniLibertyFranchises";
+
+    public string Description => "Коллекции из франшиз AniLiberty: сезоны, фильмы и OVA в порядке просмотра.";
+
+    public string Category => "AniLiberty";
+
+    public Task ExecuteAsync(IProgress<double> progress, CancellationToken cancellationToken)
+        => _builder.RunAsync(progress, cancellationToken);
+
+    public IEnumerable<TaskTriggerInfo> GetDefaultTriggers()
+    {
+        yield return new TaskTriggerInfo
+        {
+            Type = TaskTriggerInfoType.DailyTrigger,
+            TimeOfDayTicks = TimeSpan.FromHours(5).Ticks,
+        };
+    }
+}
+
+/// <summary>Rebuilds franchise collections after each library scan, so new seasons land in them right away.</summary>
+public sealed class FranchisePostScanTask : ILibraryPostScanTask
+{
+    private readonly FranchiseBuilder _builder;
+
+    public FranchisePostScanTask(FranchiseBuilder builder)
+    {
+        _builder = builder;
+    }
+
+    public Task Run(IProgress<double> progress, CancellationToken cancellationToken)
+        => _builder.RunAsync(progress, cancellationToken);
 }

@@ -20,5 +20,6 @@ public sealed class ServiceRegistrator : IPluginServiceRegistrator
         serviceCollection.AddSingleton<LibraryIndex>();
         serviceCollection.AddSingleton<SyncService>();
         serviceCollection.AddHostedService<PlaybackSyncService>();
+        serviceCollection.AddSingleton<FranchiseBuilder>();
     }
 }
