@@ -24,17 +24,20 @@ public sealed class SyncService
     private readonly AccountStore _store;
     private readonly AccountClient _account;
     private readonly LibraryIndex _index;
+    private readonly AniLibertyClient _aniliberty;
     private readonly IUserManager _users;
     private readonly IUserDataManager _userData;
     private readonly IPlaylistManager _playlists;
     private readonly ILibraryManager _library;
     private readonly ILogger<SyncService> _logger;
     private readonly ConcurrentDictionary<Guid, SemaphoreSlim> _locks = new();
+    private readonly ConcurrentDictionary<(Guid User, long Release), string> _autoCollectionSent = new();
 
     public SyncService(
         AccountStore store,
         AccountClient account,
         LibraryIndex index,
+        AniLibertyClient aniliberty,
         IUserManager users,
         IUserDataManager userData,
         IPlaylistManager playlists,
@@ -44,6 +47,7 @@ public sealed class SyncService
         _store = store;
         _account = account;
         _index = index;
+        _aniliberty = aniliberty;
         _users = users;
         _userData = userData;
         _playlists = playlists;
@@ -55,18 +59,21 @@ public sealed class SyncService
 
     // ---------- live pushes from playback / user actions ----------
 
-    /// <summary>Send one episode's progress; called from playback events and "mark played" toggles.</summary>
-    public async Task PushAsync(Guid userId, BaseItem item, double seconds, bool watched, CancellationToken ct)
+    /// <summary>
+    /// Send one episode's progress; called from playback events and "mark played" toggles.
+    /// Returns true when the release was moved to another collection (the caller reconciles playlists soon).
+    /// </summary>
+    public async Task<bool> PushAsync(Guid userId, BaseItem item, double seconds, bool watched, CancellationToken ct)
     {
         if (_store.Get(userId) is not { IsLinked: true } link)
         {
-            return;
+            return false;
         }
 
         var episodeId = await _index.EpisodeIdAsync(item, ct).ConfigureAwait(false);
         if (episodeId is null)
         {
-            return;
+            return false;
         }
 
         var gate = LockFor(userId);
@@ -77,21 +84,68 @@ public sealed class SyncService
             {
                 await _account.DeleteTimecodesAsync(link.Token!, new[] { episodeId }, ct).ConfigureAwait(false);
                 _store.Update(userId, l => l.Timecodes.Remove(episodeId));
+                return false;
             }
-            else
-            {
-                await _account.UpdateTimecodesAsync(link.Token!, new[] { new TimecodeUpdate(episodeId, seconds, watched) }, ct).ConfigureAwait(false);
-                _store.Update(userId, l => l.Timecodes[episodeId] = new TimecodeState { Time = seconds, Watched = watched });
-            }
+
+            await _account.UpdateTimecodesAsync(link.Token!, new[] { new TimecodeUpdate(episodeId, seconds, watched) }, ct).ConfigureAwait(false);
+            _store.Update(userId, l => l.Timecodes[episodeId] = new TimecodeState { Time = seconds, Watched = watched });
+            return await AutoCollectionAsync(link, item, episodeId, watched, ct).ConfigureAwait(false);
         }
         catch (AccountUnauthorizedException ex)
         {
             MarkUnauthorized(userId, ex);
+            return false;
         }
         finally
         {
             gate.Release();
         }
+    }
+
+    /// <summary>
+    /// Watching moves a release to "Смотрю" (from nothing, "Запланировано" or "Отложено"); finishing the last
+    /// episode of a completed release moves it to "Просмотрено", as the site itself does.
+    /// The snapshot is left alone on purpose: the next sync sees the remote change and updates the playlists.
+    /// </summary>
+    private async Task<bool> AutoCollectionAsync(AccountLink link, BaseItem item, string episodeId, bool watched, CancellationToken ct)
+    {
+        if (!(Plugin.Instance?.Configuration.AutoCollections ?? true)
+            || LibraryIndex.ReleaseId(LibraryIndex.Primary(item, _library)) is not { } releaseId)
+        {
+            return false;
+        }
+
+        var release = await _aniliberty.GetReleaseAsync(releaseId, ct).ConfigureAwait(false);
+        if (release?.Episodes is not { Count: > 0 } episodes)
+        {
+            return false;
+        }
+
+        link.Collections.TryGetValue(releaseId, out var current);
+        var lastOrdinal = episodes.Max(e => e.Ordinal ?? 0);
+        var ordinal = episodes.FirstOrDefault(e => string.Equals(e.Id, episodeId, StringComparison.OrdinalIgnoreCase))?.Ordinal ?? 0;
+        var finished = watched && !release.IsOngoing && ordinal >= lastOrdinal;
+
+        string? wanted = null;
+        if (finished && current != "WATCHED")
+        {
+            wanted = "WATCHED";
+        }
+        else if (!finished && current is null or "PLANNED" or "POSTPONED")
+        {
+            wanted = "WATCHING";
+        }
+
+        var key = (link.UserId, releaseId);
+        if (wanted is null || (_autoCollectionSent.TryGetValue(key, out var sent) && sent == wanted))
+        {
+            return false;
+        }
+
+        await _account.SetCollectionsAsync(link.Token!, new Dictionary<long, string> { [releaseId] = wanted }, ct).ConfigureAwait(false);
+        _autoCollectionSent[key] = wanted;
+        _logger.LogInformation("AniLiberty: release {Release} moved to {Collection} for user {User}", releaseId, wanted, link.UserId);
+        return true;
     }
 
     // ---------- full sync ----------
@@ -159,6 +213,21 @@ public sealed class SyncService
         var keys = new HashSet<string>(remote.Keys, StringComparer.OrdinalIgnoreCase);
         keys.UnionWith(snapshot.Keys);
         keys.UnionWith(index.ByEpisode.Keys);
+
+        // Items recreated by Jellyfin (library path change, rebuilt symlink tree) come back without user data.
+        // That looks like the user clearing everything; merge by union instead of wiping AniLiberty.
+        if (!initial)
+        {
+            var synced = snapshot.Count(p => index.ByEpisode.ContainsKey(p.Key));
+            var lost = snapshot.Count(p => index.ByEpisode.TryGetValue(p.Key, out var items) && LocalState(userData, items) is null);
+            if (lost >= 10 && lost > synced * 0.3)
+            {
+                _logger.LogWarning(
+                    "AniLiberty sync {User}: {Lost} of {Synced} synced episodes lost their progress locally (library rebuilt?); merging without removing anything",
+                    user.Username, lost, synced);
+                initial = true;
+            }
+        }
 
         foreach (var id in keys)
         {
@@ -250,6 +319,14 @@ public sealed class SyncService
 
         // Releases missing from the library have no local opinion: treat them as unchanged locally.
         local.UnionWith(snapshot.Where(id => !index.ByRelease.ContainsKey(id)));
+
+        // Same guard as for timecodes: recreated items lose their favorite flag, that's not the user unfavoriting.
+        var lost = snapshot.Count(id => !local.Contains(id));
+        if (!initial && lost >= 5 && lost > snapshot.Count * 0.3)
+        {
+            _logger.LogWarning("AniLiberty sync {User}: {Lost} of {Count} favorites gone locally (library rebuilt?); merging without removing", user.Username, lost, snapshot.Count);
+            initial = true;
+        }
 
         HashSet<long> final;
         if (initial)

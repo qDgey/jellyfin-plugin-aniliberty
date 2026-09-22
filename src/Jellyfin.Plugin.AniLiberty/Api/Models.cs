@@ -48,6 +48,12 @@ public class Member
     public string? Nickname { get; set; }
 }
 
+public class SegmentMark
+{
+    public double? Start { get; set; }
+    public double? Stop { get; set; }
+}
+
 public class ReleaseEpisode
 {
     public string? Id { get; set; }
@@ -57,6 +63,8 @@ public class ReleaseEpisode
     public double? Ordinal { get; set; }
     public int? Duration { get; set; }
     public ImageSet? Preview { get; set; }
+    public SegmentMark? Opening { get; set; }
+    public SegmentMark? Ending { get; set; }
     [JsonPropertyName("updated_at")]
     public DateTimeOffset? UpdatedAt { get; set; }
 }

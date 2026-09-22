@@ -7,8 +7,8 @@ of each episode are named as versions of one episode, so Jellyfin shows one epis
   <source>/86 - Eighty Six - AniLibria.TV [WEBRip 1080p]/86_Eighty_Six_[01]_[AniLibria_TV]_[WEBRip_1080p].mkv
   <source>/86 - Eighty Six - AniLibria.TV [WEBRip 1080p HEVC]/86_Eighty_Six_[01]_..._HEVC].mkv
     ->
-  <series>/86 - Eighty Six/Season 01/86 - Eighty Six S01E01 - WEBRip 1080p.mkv
-  <series>/86 - Eighty Six/Season 01/86 - Eighty Six S01E01 - WEBRip 1080p HEVC.mkv
+  <series>/86 - Eighty Six/Season 01/86 - Eighty Six S01E01 - 1080p AVC WEBRip.mkv
+  <series>/86 - Eighty Six/Season 01/86 - Eighty Six S01E01 - 1080p HEVC WEBRip.mkv
 
 Movies: single-file torrents (a loose file, or a folder holding one file without an episode number):
 
@@ -28,6 +28,7 @@ Configuration: command-line options, or environment variables (the systemd unit 
   ANILIBERTY_MOVIES     movie tree    (default /srv/aniliberty-movies)
   ANILIBERTY_MAX_DEPTH  how many grouping levels to descend under each source (default 4)
   ANILIBERTY_EXCLUDE    regex of folder/file names to skip (optional)
+  ANILIBERTY_PREFER     avc | hevc: which codec Jellyfin plays by default (default avc)
 
 The metadata plugin follows the symlinks back to torrent folder/file names to identify the release.
 """
@@ -49,6 +50,31 @@ SKIP_DIR = re.compile(
 SAMPLE_FILE = re.compile(r"(?:^|[ ._-])sample(?:[ ._-]|$)", re.I)
 
 
+RESOLUTION = re.compile(r"^\d{3,4}[pi](?:-\w+)?$", re.I)
+# Release kinds, not versions: they describe the whole torrent, not how it is encoded.
+KIND_WORD = re.compile(r"^(?:movie|film|ova|ona|oad|sp|special|tv|end)$", re.I)
+HEVC = re.compile(r"^(?:hevc|h\.?265|x265)$", re.I)
+AVC = re.compile(r"^(?:avc|h\.?264|x264)$", re.I)
+
+# Jellyfin picks the alphabetically first version as the default one; "x264" sorts after "HEVC".
+PREFER_HEVC = os.environ.get("ANILIBERTY_PREFER", "avc").lower() == "hevc"
+
+
+def version_label(tags):
+    """[WEBRip 1080p HEVC] -> "1080p HEVC WEBRip".
+
+    Every version names its codec, so no label is a prefix of another: Jellyfin strips the part shared by
+    all versions and shows the rest ("AVC WEBRip" / "HEVC WEBRip", or "720p AVC" / "1080p AVC").
+    """
+    words = [w for t in tags for w in re.split(r"[\s_]+", t) if w and not KIND_WORD.match(w)]
+    resolution = [w for w in words if RESOLUTION.match(w)]
+    codec = "HEVC" if any(HEVC.match(w) for w in words) else ("x264" if PREFER_HEVC else "AVC")
+    rest = [w for w in words if not RESOLUTION.match(w) and not HEVC.match(w) and not AVC.match(w)]
+    if not resolution and not rest and codec != "HEVC":
+        return "default"
+    return " ".join(resolution + [codec] + rest)
+
+
 def split(name):
     """Torrent/file name -> (title, version label)."""
     stem = VIDEO.sub("", name).replace("_", " ")
@@ -56,8 +82,8 @@ def split(name):
     title = re.split(r"\s-?\s*\[?\s*anili(?:bria|berty)", stem, flags=re.I)[0]
     title = re.sub(r"\[[^\]]*\]|\([^)]*\)", " ", title)
     title = re.sub(r"\s+", " ", title).strip(" -.").replace("/", " ")
-    label = " ".join(t for t in tags if t and not GROUP_TAG.match(t) and not re.fullmatch(r"\d{1,4}", t))
-    return title or stem.strip(), label or "default"
+    tags = [t for t in tags if t and not GROUP_TAG.match(t) and not re.fullmatch(r"\d{1,4}", t)]
+    return title or stem.strip(), version_label(tags)
 
 
 def episode_number(filename):
@@ -195,9 +221,13 @@ def main():
     ap.add_argument("--movies", default=env("ANILIBERTY_MOVIES", "/srv/aniliberty-movies"))
     ap.add_argument("--max-depth", type=int, default=int(env("ANILIBERTY_MAX_DEPTH", "4")))
     ap.add_argument("--exclude", default=env("ANILIBERTY_EXCLUDE", ""), help="regex of folder/file names to skip")
+    ap.add_argument("--prefer", choices=["avc", "hevc"], help="default version codec; default: $ANILIBERTY_PREFER or avc")
     ap.add_argument("--dry-run", action="store_true", help="only report what would change")
     ap.add_argument("--list", type=int, default=0, metavar="N", help="also print N sample links")
     args = ap.parse_args()
+    if args.prefer:
+        global PREFER_HEVC
+        PREFER_HEVC = args.prefer == "hevc"
 
     raw = args.source or (env("ANILIBERTY_SOURCES") or env("ANILIBERTY_SOURCE") or "/media/aniliberty").split(":")
     sources = [os.path.abspath(s) for s in raw if s]

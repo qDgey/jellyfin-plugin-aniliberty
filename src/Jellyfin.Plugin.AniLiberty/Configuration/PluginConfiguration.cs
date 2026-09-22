@@ -24,6 +24,12 @@ public class PluginConfiguration : BasePluginConfiguration
     /// <summary>Default interval of the account sync task (users can still change the trigger in Scheduled tasks).</summary>
     public int AccountSyncIntervalMinutes { get; set; } = 15;
 
+    /// <summary>Show an "AniLiberty" link to the account page in the web client's side menu.</summary>
+    public bool ShowMenuLink { get; set; } = true;
+
+    /// <summary>Move releases to "Смотрю"/"Просмотрено" on AniLiberty automatically while watching.</summary>
+    public bool AutoCollections { get; set; } = true;
+
     /// <summary>Which twin of a release (AVC or HEVC folder) goes into the collection playlists.</summary>
     public bool PreferHevcInPlaylists { get; set; } = true;
 }

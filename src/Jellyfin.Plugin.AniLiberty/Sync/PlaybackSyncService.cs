@@ -119,7 +119,11 @@ public sealed class PlaybackSyncService : IHostedService
         {
             try
             {
-                await _sync.PushAsync(userId, item, watched ? Math.Max(seconds, runtime) : seconds, watched, CancellationToken.None).ConfigureAwait(false);
+                if (await _sync.PushAsync(userId, item, watched ? Math.Max(seconds, runtime) : seconds, watched, CancellationToken.None).ConfigureAwait(false))
+                {
+                    // The release changed collection on the site: bring the playlists in line.
+                    ScheduleSync(userId, TimeSpan.FromSeconds(30));
+                }
             }
             catch (Exception ex)
             {

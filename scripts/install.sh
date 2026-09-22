@@ -11,6 +11,7 @@
 #   --user USER      user Jellyfin runs as                  (default jellyfin)
 #   --depth N        grouping levels to descend (years, categories...) (default 4)
 #   --exclude REGEX  folder/file names to skip
+#   --prefer CODEC   avc | hevc: default version when both exist (default avc)
 #   --no-run         don't build the trees now
 #   --no-timer       don't enable the hourly timer
 #   --yes            don't ask for confirmation
@@ -23,7 +24,7 @@ CONF=/etc/aniliberty-tree.conf
 UNIT_DIR=/etc/systemd/system
 DROPIN="$UNIT_DIR/aniliberty-tree.service.d"
 
-SOURCES=() SERIES="" MOVIES="" RUN_USER="" DEPTH="" EXCLUDE="" RUN=1 TIMER=1 YES=0 UNINSTALL=0
+SOURCES=() SERIES="" MOVIES="" RUN_USER="" DEPTH="" EXCLUDE="" PREFER="" RUN=1 TIMER=1 YES=0 UNINSTALL=0
 
 die() { echo "error: $*" >&2; exit 1; }
 say() { echo "==> $*"; }
@@ -36,6 +37,7 @@ while [ $# -gt 0 ]; do
     --user) RUN_USER="${2:?}"; shift 2 ;;
     --depth) DEPTH="${2:?}"; shift 2 ;;
     --exclude) EXCLUDE="${2:?}"; shift 2 ;;
+    --prefer) PREFER="${2:?}"; shift 2 ;;
     --no-run) RUN=0; shift ;;
     --no-timer) TIMER=0; shift ;;
     --yes|-y) YES=1; shift ;;
@@ -86,6 +88,8 @@ if [ -z "$RUN_USER" ]; then
 fi
 DEPTH="${DEPTH:-${ANILIBERTY_MAX_DEPTH:-4}}"
 EXCLUDE="${EXCLUDE:-${ANILIBERTY_EXCLUDE:-}}"
+PREFER="${PREFER:-${ANILIBERTY_PREFER:-avc}}"
+case "$PREFER" in avc|hevc) ;; *) die "--prefer must be avc or hevc" ;; esac
 
 id "$RUN_USER" >/dev/null 2>&1 || die "user $RUN_USER does not exist"
 as_user() { if [ "$RUN_USER" = root ]; then "$@"; else runuser -u "$RUN_USER" -- "$@"; fi; }
@@ -98,7 +102,7 @@ for s in "${SOURCES[@]}"; do
 done
 
 say "sources: ${SOURCES[*]}"
-say "series tree: $SERIES, movie tree: $MOVIES, user: $RUN_USER, depth: $DEPTH${EXCLUDE:+, exclude: $EXCLUDE}"
+say "series tree: $SERIES, movie tree: $MOVIES, user: $RUN_USER, depth: $DEPTH, default codec: $PREFER${EXCLUDE:+, exclude: $EXCLUDE}"
 
 # --- files -----------------------------------------------------------------------------------------------
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd || true)"
@@ -121,6 +125,7 @@ fetch aniliberty-tree.py "$BIN" 755
   echo "ANILIBERTY_MOVIES='$MOVIES'"
   echo "ANILIBERTY_MAX_DEPTH='$DEPTH'"
   echo "ANILIBERTY_EXCLUDE='$EXCLUDE'"
+  echo "ANILIBERTY_PREFER='$PREFER'"
 } >"$CONF"
 chmod 644 "$CONF"
 say "config: $CONF"

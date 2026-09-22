@@ -74,9 +74,16 @@ public sealed class LibraryIndex
         }
     }
 
+    /// <summary>The primary version of an alternate episode/movie file (alternates carry no provider ids).</summary>
+    public static BaseItem Primary(BaseItem item, ILibraryManager library)
+    {
+        return item is Video { PrimaryVersionId: { } id } && library.GetItemById(id) is { } primary ? primary : item;
+    }
+
     /// <summary>AniLiberty episode uuid for a playable item, resolving movies through their release.</summary>
     public async Task<string?> EpisodeIdAsync(BaseItem item, CancellationToken ct)
     {
+        item = Primary(item, _library);
         if (item is Episode && item.TryGetProviderId(Plugin.ProviderKey, out var uuid) && Guid.TryParse(uuid, out _))
         {
             return uuid;
