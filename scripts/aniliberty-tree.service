@@ -1,12 +1,14 @@
 [Unit]
 Description=Rebuild AniLiberty series/movie symlink trees for Jellyfin
-RequiresMountsFor=/media/aniliberty
+# Wait for network/remote mounts; for archives on NFS/SMB add RequiresMountsFor=<source> (install.sh does it).
+After=network-online.target remote-fs.target
 
 [Service]
 Type=oneshot
-# Run as the user Jellyfin runs as, so it can read the trees.
+# The user Jellyfin runs as, so it can read the trees.
 User=jellyfin
-Environment=ANILIBERTY_SOURCE=/media/aniliberty
-Environment=ANILIBERTY_SERIES=/srv/aniliberty-series
-Environment=ANILIBERTY_MOVIES=/srv/aniliberty-movies
+# Paths and options: see aniliberty-tree.conf.
+EnvironmentFile=/etc/aniliberty-tree.conf
 ExecStart=/usr/bin/python3 /usr/local/bin/aniliberty-tree.py
+Nice=10
+IOSchedulingClass=idle

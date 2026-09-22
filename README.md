@@ -60,24 +60,96 @@
 ```
 
 Оригинальные файлы не трогаются (раздача продолжает работать), в дереве только симлинки.
-Установка на хосте/в контейнере, где работает Jellyfin:
+Скрипт ставится туда же, где работает Jellyfin (хост, LXC или VM; для Docker — см. ниже).
+
+#### Какая структура архива поддерживается
+
+Любая — скрипт сам находит раздачи, обходя папки вглубь:
+
+```
+/data/anime/                              ← корень (их может быть несколько, например на разных дисках)
+├── 2016/                                 ← группирующая папка (годы, категории…) — в неё заходим
+│   └── Boku no Hero Academia - AniLibria.TV [WEBRip 1080p]/   ← раздача: папка с видео
+│       ├── Boku_no_Hero_Academia_[01]_….mkv
+│       └── Extras/                       ← пропускается
+├── Фильмы/
+│   ├── Kimi_no_Na_wa_[AniLibria]_[BDRip_1080p].mkv            ← одиночный файл — фильм
+│   └── Tenki no Ko - AniLibria [BDRip 1080p]/Tenki_no_Ko_….mkv ← папка с одним файлом без номера — фильм
+└── Gintama - AniLibria.TV [WEBRip 1080p]/
+    ├── Season 1/Gintama_[01]_….mkv       ← подпапки сезонов (Season N, Сезон N, S0N)
+    └── Season 2/Gintama_[03]_….mkv
+/mnt/disk2/anime/Онгоинги/Boku no Hero Academia - AniLibria.TV [WEBRip 1080p HEVC]/…
+                                          ← вторая раздача того же релиза на другом диске → вторая версия серий
+```
+
+- **раздача** — папка, в которой прямо лежат видео (и, возможно, подпапки сезонов);
+  несколько серий → сериал, один файл без номера серии (`[01]`) → фильм;
+- **группирующая папка** — любая другая (корень, годы, «Фильмы», «Онгоинги»…); видео прямо в ней — фильмы;
+- раздачи одного релиза из разных мест (AVC/HEVC, 1080p/720p, разные диски) объединяются по названию;
+- пропускаются скрытые папки, `Extras`/`Bonus`/`Samples`/`NCOP`/… и то, что подходит под `ANILIBERTY_EXCLUDE`;
+- глубина поиска — `ANILIBERTY_MAX_DEPTH` (по умолчанию 4 уровня группирующих папок).
+
+#### Установка одной командой
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/qDgey/jellyfin-plugin-aniliberty/main/scripts/install.sh | sudo bash -s -- --source /data/anime
+```
+
+Несколько корней — несколько `--source`. Без параметров установщик спросит пути сам. Что он делает:
+
+1. ставит `/usr/local/bin/aniliberty-tree.py` и пишет конфиг `/etc/aniliberty-tree.conf`;
+2. создаёт папки деревьев (по умолчанию `/srv/aniliberty-series`, `/srv/aniliberty-movies`) с владельцем `jellyfin`;
+3. показывает пробный прогон (сколько найдено раздач, серий, фильмов, примеры ссылок) и спрашивает, строить ли;
+4. ставит systemd-таймер на пересборку раз в час (без systemd — подскажет строку для cron).
+
+Параметры: `--series DIR`, `--movies DIR`, `--user USER` (от чьего имени работает Jellyfin),
+`--depth N`, `--exclude REGEX`, `--no-run`, `--no-timer`, `--yes` (без вопросов), `--uninstall`.
+Повторный запуск берёт значения из существующего конфига — так же обновляется скрипт.
+
+Проверить, что получится, ничего не меняя:
+
+```bash
+sudo -u jellyfin bash -c 'set -a; . /etc/aniliberty-tree.conf; set +a; python3 /usr/local/bin/aniliberty-tree.py --dry-run --list 20'
+```
+
+#### Установка вручную
 
 ```bash
 sudo install -m 755 scripts/aniliberty-tree.py /usr/local/bin/
+sudo install -m 644 scripts/aniliberty-tree.conf /etc/            # поправить пути в нём
 sudo install -m 644 scripts/aniliberty-tree.service scripts/aniliberty-tree.timer /etc/systemd/system/
 sudo mkdir -p /srv/aniliberty-series /srv/aniliberty-movies
 sudo chown jellyfin:jellyfin /srv/aniliberty-series /srv/aniliberty-movies
-# при необходимости поправить пути (ANILIBERTY_SOURCE / _SERIES / _MOVIES) и User= в .service
 sudo systemctl daemon-reload
-sudo systemctl start aniliberty-tree.service      # первая сборка
-sudo systemctl enable --now aniliberty-tree.timer # дальше — раз в час
+sudo systemctl start aniliberty-tree.service                      # первая сборка
+sudo systemctl enable --now aniliberty-tree.timer                 # дальше — раз в час
 ```
 
-Скрипт идемпотентный: добавляет новые релизы и убирает ссылки на исчезнувшие файлы.
-Если архив не смонтирован (пустой каталог), он ничего не удаляет.
+Если Jellyfin работает не от `jellyfin` или архив на NFS/SMB — добавьте в
+`systemctl edit aniliberty-tree.service`:
 
-**Jellyfin в Docker:** запускайте скрипт на хосте, а в контейнер пробросьте архив и оба дерева
-**по тем же путям**, что на хосте (симлинки указывают на абсолютные пути источника).
+```ini
+[Unit]
+RequiresMountsFor=/data/anime
+[Service]
+User=<пользователь Jellyfin>
+```
+
+Или без systemd, просто по cron: `17 * * * * set -a; . /etc/aniliberty-tree.conf; set +a; python3 /usr/local/bin/aniliberty-tree.py`.
+
+Скрипт идемпотентный: добавляет новые релизы и убирает ссылки на исчезнувшие файлы.
+Если какой-то корень не смонтирован (пустой каталог), он ничего не меняет.
+
+**Jellyfin в Docker:** скрипт запускается на хосте (от пользователя с тем же UID, что у Jellyfin
+в контейнере), а в контейнер пробрасываются архив и оба дерева **по тем же путям**, что на хосте —
+симлинки указывают на абсолютные пути источника:
+
+```yaml
+volumes:
+  - /data/anime:/data/anime:ro
+  - /srv/aniliberty-series:/srv/aniliberty-series:ro
+  - /srv/aniliberty-movies:/srv/aniliberty-movies:ro
+```
 
 Медиатеки:
 
@@ -215,7 +287,10 @@ src/Jellyfin.Plugin.AniLiberty/
   Web/
     AccountController.cs, link.html  страница и API привязки аккаунта
 scripts/
-  aniliberty-tree.py (+ .service, .timer)  дерево симлинков для медиатек
+  aniliberty-tree.py                 дерево симлинков для медиатек
+  aniliberty-tree.conf               пример конфига (/etc/aniliberty-tree.conf)
+  aniliberty-tree.service, .timer    пересборка раз в час
+  install.sh                         установка всего этого одной командой
 manifest.json                        репозиторий плагинов для Jellyfin
 .github/                             сборка релизов
 ```

@@ -125,9 +125,21 @@ public sealed class ReleaseResolver
         if (!string.IsNullOrEmpty(info.Path))
         {
             // Movie tree entries are symlinks to the torrent files; the target's name is the torrent name.
-            if (LinkTarget(info.Path) is { } target && seen.Add(Path.GetFileName(target)))
+            if (LinkTarget(info.Path) is { } target)
             {
-                yield return Path.GetFileName(target);
+                if (seen.Add(Path.GetFileName(target)))
+                {
+                    yield return Path.GetFileName(target);
+                }
+
+                // Single-file torrent packed in a folder: the folder is the torrent. Grouping folders
+                // ("2016", "Movies") are skipped by requiring a release-looking name.
+                if (Path.GetFileName(Path.GetDirectoryName(target)) is { Length: > 0 } folder
+                    && (folder.Contains("anili", StringComparison.OrdinalIgnoreCase) || folder.Contains('['))
+                    && seen.Add(folder))
+                {
+                    yield return folder;
+                }
             }
 
             // Series tree folders merge several torrent folders; their episode symlinks point into them.
