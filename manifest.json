@@ -8,6 +8,14 @@
     "category": "Metadata",
     "versions": [
       {
+        "version": "0.5.0.0",
+        "changelog": "Точнее сопоставление: английские названия и синонимы Shikimori, слитные написания, теги качества в именах папок, римские цифры",
+        "targetAbi": "12.1.0.0",
+        "sourceUrl": "https://github.com/qDgey/jellyfin-plugin-aniliberty/releases/download/v0.5.0.0/aniliberty_0.5.0.0.zip",
+        "checksum": "d86fbd919c0abe669570fb6998d804dd",
+        "timestamp": "2026-09-22T21:26:45Z"
+      },
+      {
         "version": "0.4.2.0",
         "changelog": "Пункт AniLiberty в меню появляется без очистки кэша браузера",
         "targetAbi": "12.1.0.0",
