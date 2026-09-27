@@ -84,8 +84,9 @@ public sealed class AniLibertyClient
             return Array.Empty<Release>();
         }
 
-        var url = $"{ApiUrl}/anime/releases/list?ids={string.Join(',', ids)}";
-        return await Http.GetJsonAsync<List<Release>>(Client(), url, ct).ConfigureAwait(false) ?? new List<Release>();
+        var url = $"{ApiUrl}/anime/releases/list?ids={string.Join(',', ids)}&limit={ids.Count}";
+        var page = await Http.GetJsonAsync<Paged<Release>>(Client(), url, ct).ConfigureAwait(false);
+        return page?.Data ?? new List<Release>();
     }
 
     /// <summary>Find a release by the exact torrent name (folder name or single-file name).</summary>
