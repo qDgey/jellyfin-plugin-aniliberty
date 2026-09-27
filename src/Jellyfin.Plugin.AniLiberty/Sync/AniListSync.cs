@@ -62,7 +62,11 @@ public sealed class AniListSync
         foreach (var malId in local.Keys.Union(remote.Keys).Union(snapshot.Keys))
         {
             ct.ThrowIfCancellationRequested();
-            local.TryGetValue(malId, out var l);
+            // A title that isn't in the library has no local opinion: keep whatever both sides agreed on.
+            var inLibrary = episodesByMal.ContainsKey(malId);
+            var l = local.TryGetValue(malId, out var localState) ? localState
+                : inLibrary ? null
+                : snapshot.TryGetValue(malId, out var keep) ? new State(keep.Progress, keep.Status ?? string.Empty) : null;
             var r = remote.TryGetValue(malId, out var entry) ? new State(entry.Progress, entry.Status ?? string.Empty) : null;
             var s = snapshot.TryGetValue(malId, out var saved) ? new State(saved.Progress, saved.Status ?? string.Empty) : null;
 
