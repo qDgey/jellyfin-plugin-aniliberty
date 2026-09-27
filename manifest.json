@@ -8,6 +8,14 @@
     "category": "Metadata",
     "versions": [
       {
+        "version": "0.6.4.0",
+        "changelog": "AniList sync keeps COMPLETED and completes titles that reached their episode count.",
+        "targetAbi": "12.1.0.0",
+        "sourceUrl": "https://github.com/qDgey/jellyfin-plugin-aniliberty/releases/download/v0.6.4.0/aniliberty_0.6.4.0.zip",
+        "checksum": "6157b8bab362e982b00b9bf008fd3331",
+        "timestamp": "2026-09-27T18:43:42Z"
+      },
+      {
         "version": "0.6.3.0",
         "changelog": "The account page resolves favourites the server cannot fetch, via the user's browser.",
         "targetAbi": "12.1.0.0",
