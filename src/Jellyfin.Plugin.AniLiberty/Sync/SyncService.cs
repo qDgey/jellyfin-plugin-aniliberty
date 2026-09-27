@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Globalization;
 using Jellyfin.Data.Enums;
 using Jellyfin.Database.Implementations.Entities;
 using Jellyfin.Plugin.AniLiberty.Api;
@@ -176,7 +177,7 @@ public sealed class SyncService
             var initial = !link.Merged;
 
             var timecodes = await SyncTimecodesAsync(user, link, index, token, initial, ct).ConfigureAwait(false);
-            var (favorites, missing) = await SyncFavoritesAsync(user, link, index, token, initial, ct).ConfigureAwait(false);
+            var (favorites, missing, missingNames) = await SyncFavoritesAsync(user, link, index, token, initial, ct).ConfigureAwait(false);
             var collections = await SyncCollectionsAsync(user, link, index, token, initial, ct).ConfigureAwait(false);
 
             _store.Update(userId, l =>
@@ -186,6 +187,7 @@ public sealed class SyncService
                 l.Collections = collections.State;
                 l.Playlists = collections.Playlists;
                 l.MissingFavorites = missing;
+                l.MissingFavoriteNames = missingNames;
                 l.Merged = true;
                 l.LastSyncAt = DateTime.UtcNow;
                 l.LastError = null;
@@ -344,7 +346,7 @@ public sealed class SyncService
         return result;
     }
 
-    private async Task<(HashSet<long> State, List<long> Missing)> SyncFavoritesAsync(
+    private async Task<(HashSet<long> State, List<long> Missing, Dictionary<string, string> Names)> SyncFavoritesAsync(
         User user, AccountLink link, LibraryIndex.Snapshot index, string token, bool initial, CancellationToken ct)
     {
         var remote = await _account.GetFavoriteIdsAsync(token, ct).ConfigureAwait(false);
@@ -399,10 +401,34 @@ public sealed class SyncService
         await _account.RemoveFavoritesAsync(token, remote.Except(final).ToList(), ct).ConfigureAwait(false);
 
         var missing = final.Where(id => !index.ByRelease.ContainsKey(id)).OrderBy(id => id).ToList();
+
+        // Show what those are, and drop the ones the library does have under another provider's id.
+        var names = new Dictionary<string, string>();
+        var here = new List<long>();
+        foreach (var chunk in missing.ToList().Chunk(50))
+        {
+            foreach (var release in await _aniliberty.GetReleasesAsync(chunk, ct).ConfigureAwait(false))
+            {
+                // The library may hold the title under a Shikimori/MAL match instead of an AniLiberty id.
+                if (release.Mal?.Id is { } malId && index.ByMal.ContainsKey(malId))
+                {
+                    here.Add(release.Id);
+                    continue;
+                }
+
+                var title = release.Name?.Main ?? release.Name?.English;
+                if (!string.IsNullOrWhiteSpace(title))
+                {
+                    names[release.Id.ToString(CultureInfo.InvariantCulture)] = title;
+                }
+            }
+        }
+
+        missing.RemoveAll(here.Contains);
         _logger.LogInformation(
             "AniLiberty sync {User}: favorites {Count} ({Missing} not in library), → remote +{Add} -{Remove}",
             user.Username, final.Count, missing.Count, final.Count(id => !remote.Contains(id)), remote.Count(id => !final.Contains(id)));
-        return (final, missing);
+        return (final, missing, names);
     }
 
     private async Task<(Dictionary<long, string> State, Dictionary<string, Guid> Playlists)> SyncCollectionsAsync(

@@ -33,7 +33,7 @@
   .error { color: var(--danger); margin-top: 12px; }
   .muted { color: var(--muted); font-size: 14px; }
   .missing { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
-  .missing a { font-size: 14px; padding: 2px 8px; border: 1px solid var(--line); border-radius: 6px; text-decoration: none; }
+  .missing a, .missing span { font-size: 14px; padding: 2px 8px; border: 1px solid var(--line); border-radius: 6px; text-decoration: none; }
   [hidden] { display: none !important; }
 </style>
 </head>
@@ -83,7 +83,7 @@
       <button class="danger" id="unlink">Отвязать</button>
     </div>
     <div id="missingBox" hidden>
-      <p class="muted" style="margin-top:16px">В избранном на сайте, но нет в медиатеке:</p>
+      <p class="muted" style="margin-top:16px">В избранном на AniLiberty, но не скачано:</p>
       <div class="missing" id="missing"></div>
     </div>
   </div>
@@ -191,11 +191,22 @@
       $('collections').textContent = s.collections;
       var box = $('missing');
       box.textContent = '';
+      var names = s.missingFavoriteNames || {};
       (s.missingFavorites || []).slice(0, 60).forEach(function (id) {
+        var name = names[id];
+        if (!name) {
+          // No title: the site refuses to serve this release to us, so we can't even check the library.
+          var gone = document.createElement('span');
+          gone.className = 'muted';
+          gone.textContent = '#' + id + ' — AniLiberty не отдаёт этот релиз';
+          box.appendChild(gone);
+          return;
+        }
+
         var a = document.createElement('a');
         a.href = s.siteUrl + '/anime/releases/release/' + id;
         a.target = '_blank'; a.rel = 'noopener';
-        a.textContent = '#' + id;
+        a.textContent = name;
         box.appendChild(a);
       });
       $('missingBox').hidden = !(s.missingFavorites || []).length;

@@ -57,6 +57,9 @@ public sealed class AccountLink
     /// <summary>Release ids AniLiberty knows but the local library lacks (shown on the link page).</summary>
     public List<long> MissingFavorites { get; set; } = new();
 
+    /// <summary>Titles of those releases, keyed by id; an id with no name here is one AniLiberty won't show us.</summary>
+    public Dictionary<string, string> MissingFavoriteNames { get; set; } = new();
+
     // AniList (anilist.co) — a separate account, linked separately.
     public string? AniListToken { get; set; }
 

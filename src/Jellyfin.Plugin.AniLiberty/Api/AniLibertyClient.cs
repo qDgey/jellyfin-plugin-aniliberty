@@ -76,6 +76,18 @@ public sealed class AniLibertyClient
         return Http.GetJsonAsync<Franchise>(Client(), $"{ApiUrl}/anime/franchises/{Uri.EscapeDataString(id)}", ct);
     }
 
+    /// <summary>Several releases at once; ids the site no longer has are simply missing from the answer.</summary>
+    public async Task<IReadOnlyList<Release>> GetReleasesAsync(IReadOnlyCollection<long> ids, CancellationToken ct)
+    {
+        if (ids.Count == 0)
+        {
+            return Array.Empty<Release>();
+        }
+
+        var url = $"{ApiUrl}/anime/releases/list?ids={string.Join(',', ids)}";
+        return await Http.GetJsonAsync<List<Release>>(Client(), url, ct).ConfigureAwait(false) ?? new List<Release>();
+    }
+
     /// <summary>Find a release by the exact torrent name (folder name or single-file name).</summary>
     public async Task<long?> FindByTorrentNameAsync(string name, CancellationToken ct)
     {

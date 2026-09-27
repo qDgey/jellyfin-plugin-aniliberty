@@ -1,6 +1,7 @@
 using Jellyfin.Database.Implementations.Entities;
 using Jellyfin.Plugin.AniLiberty.Api;
 using MediaBrowser.Controller.Entities;
+using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Model.Entities;
 using Microsoft.Extensions.Logging;
@@ -46,7 +47,8 @@ public sealed class AniListSync
         }
 
         var snapshot = link.AniList;
-        var local = LocalStates(user, index, out var episodesByMal);
+        var episodesByMal = index.EpisodesByMal;
+        var local = LocalStates(user, episodesByMal);
         var initial = !link.AniListMerged;
 
         // A rebuilt library comes back without user data; that isn't the user resetting their list.
@@ -124,22 +126,15 @@ public sealed class AniListSync
     }
 
     /// <summary>What Jellyfin knows: highest watched episode per title, and whether the release is finished.</summary>
-    private Dictionary<long, State> LocalStates(User user, LibraryIndex.Snapshot index, out Dictionary<long, List<BaseItem>> episodesByMal)
+    private Dictionary<long, State> LocalStates(User user, Dictionary<long, List<BaseItem>> episodesByMal)
     {
         var result = new Dictionary<long, State>();
-        episodesByMal = new Dictionary<long, List<BaseItem>>();
-        foreach (var (releaseId, episodes) in index.EpisodesByRelease)
+        foreach (var (malId, episodes) in episodesByMal)
         {
-            if (!index.MalOfRelease.TryGetValue(releaseId, out var malId))
-            {
-                continue;
-            }
-
-            episodesByMal[malId] = episodes;
             var data = _userData.GetUserDataBatch(episodes, user);
             var watched = episodes
                 .Where(e => data.GetValueOrDefault(e.Id)?.Played == true)
-                .Select(e => e.IndexNumber ?? 0)
+                .Select(Number)
                 .DefaultIfEmpty(0)
                 .Max();
             if (watched <= 0)
@@ -147,7 +142,7 @@ public sealed class AniListSync
                 continue;
             }
 
-            var total = episodes.Select(e => e.IndexNumber ?? 0).DefaultIfEmpty(0).Max();
+            var total = episodes.Select(Number).DefaultIfEmpty(0).Max();
             result[malId] = new State(watched, watched >= total ? "COMPLETED" : "CURRENT");
         }
 
@@ -158,7 +153,7 @@ public sealed class AniListSync
     {
         var changed = 0;
         var data = _userData.GetUserDataBatch(episodes, user);
-        foreach (var episode in episodes.Where(e => e.IndexNumber is { } n && n <= progress))
+        foreach (var episode in episodes.Where(e => Number(e) is var n && n > 0 && n <= progress))
         {
             var userData = data.GetValueOrDefault(episode.Id) ?? _userData.GetUserData(user, episode);
             if (userData is null || userData.Played)
@@ -176,6 +171,9 @@ public sealed class AniListSync
 
         return changed;
     }
+
+    /// <summary>Episode number; a movie is its own single episode.</summary>
+    private static int Number(BaseItem item) => item.IndexNumber ?? (item is Episode ? 0 : 1);
 
     private static State? Best(State? a, State? b)
     {
