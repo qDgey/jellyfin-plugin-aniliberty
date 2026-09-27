@@ -46,6 +46,12 @@ public sealed class LibraryIndex
 
         /// <summary>Playable item id → AniLiberty episode uuid.</summary>
         public Dictionary<Guid, string> EpisodeOfItem { get; } = new();
+
+        /// <summary>Release id → its episodes (primary versions), for list trackers that count episodes.</summary>
+        public Dictionary<long, List<BaseItem>> EpisodesByRelease { get; } = new();
+
+        /// <summary>Release id → MyAnimeList id, as AniLiberty reports it.</summary>
+        public Dictionary<long, long> MalOfRelease { get; } = new();
     }
 
     public void Invalidate() => _snapshot = null;
@@ -125,6 +131,12 @@ public sealed class LibraryIndex
                     snapshot.EpisodeOfItem[item.Id] = uuid;
                 }
 
+                // Alternate versions (HEVC twins) would count twice.
+                if (ReleaseId(item) is { } episodeRelease && item is not Video { PrimaryVersionId: not null })
+                {
+                    Add(snapshot.EpisodesByRelease, episodeRelease, item);
+                }
+
                 continue;
             }
 
@@ -135,6 +147,11 @@ public sealed class LibraryIndex
 
             Add(snapshot.ByRelease, releaseId, item);
             snapshot.ReleaseOfTitle[item.Id] = releaseId;
+            if (item.TryGetProviderId(Plugin.MalKey, out var mal)
+                && long.TryParse(mal, NumberStyles.Integer, CultureInfo.InvariantCulture, out var malId))
+            {
+                snapshot.MalOfRelease[releaseId] = malId;
+            }
 
             if (item is Movie && await EpisodeIdAsync(item, ct).ConfigureAwait(false) is { } movieEpisode)
             {

@@ -59,6 +59,20 @@
                     </label>
                 </div>
                 <div class="inputContainer">
+                    <input is="emby-input" type="text" id="AniListClientId" label="AniList client id" />
+                    <div class="fieldDescription">
+                        Для синхронизации с AniList: anilist.co → Settings → Developer → Create New Client,
+                        в поле Redirect URL укажите адрес страницы привязки, например http://jellyfin:8096/AniLiberty/Link.
+                        Аккаунт AniList каждый пользователь привязывает на этой странице сам.
+                    </div>
+                </div>
+                <div class="checkboxContainer">
+                    <label>
+                        <input is="emby-checkbox" type="checkbox" id="AniListPullProgress" />
+                        <span>Отмечать серии просмотренными в Jellyfin, если в AniList прогресс больше</span>
+                    </label>
+                </div>
+                <div class="inputContainer">
                     <input is="emby-input" type="number" id="TorrentIndexRefreshHours" min="1" label="Обновлять индекс торрентов, часов" />
                 </div>
                 <div>
@@ -71,8 +85,8 @@
         (function () {
             var pluginId = '5b7c3f7e-2c1a-4d7e-9a57-7a1b0c0de001';
             var page = document.querySelector('#aniLibertyConfigPage');
-            var text = ['SiteUrl', 'ShikimoriUrl', 'TorrentIndexRefreshHours'];
-            var bool = ['EnableShikimoriFallback', 'PreferEnglishTitle', 'ImportTeam', 'PreferHevcInPlaylists', 'AutoCollections', 'ShowMenuLink'];
+            var text = ['SiteUrl', 'ShikimoriUrl', 'TorrentIndexRefreshHours', 'AniListClientId'];
+            var bool = ['EnableShikimoriFallback', 'PreferEnglishTitle', 'ImportTeam', 'PreferHevcInPlaylists', 'AutoCollections', 'ShowMenuLink', 'AniListPullProgress'];
 
             page.addEventListener('pageshow', function () {
                 Dashboard.showLoadingMsg();

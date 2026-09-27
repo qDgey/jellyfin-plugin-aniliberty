@@ -11,6 +11,14 @@ public sealed class TimecodeState
     public bool Watched { get; set; }
 }
 
+/// <summary>Last agreed progress/status of one AniList title.</summary>
+public sealed class AniListState
+{
+    public int Progress { get; set; }
+
+    public string? Status { get; set; }
+}
+
 /// <summary>AniLiberty account linked to one Jellyfin user.</summary>
 public sealed class AccountLink
 {
@@ -48,6 +56,22 @@ public sealed class AccountLink
 
     /// <summary>Release ids AniLiberty knows but the local library lacks (shown on the link page).</summary>
     public List<long> MissingFavorites { get; set; } = new();
+
+    // AniList (anilist.co) — a separate account, linked separately.
+    public string? AniListToken { get; set; }
+
+    public long? AniListUserId { get; set; }
+
+    public string? AniListName { get; set; }
+
+    public DateTime? AniListLinkedAt { get; set; }
+
+    public bool AniListMerged { get; set; }
+
+    /// <summary>MyAnimeList id → state both sides agreed on at the previous sync.</summary>
+    public Dictionary<long, AniListState> AniList { get; set; } = new();
+
+    public bool IsAniListLinked => !string.IsNullOrEmpty(AniListToken);
 
     public bool IsLinked => !string.IsNullOrEmpty(Token);
 }
@@ -92,7 +116,7 @@ public sealed class AccountStore
     {
         lock (_sync)
         {
-            return Load().Values.Where(l => l.IsLinked).ToList();
+            return Load().Values.Where(l => l.IsLinked || l.IsAniListLinked).ToList();
         }
     }
 

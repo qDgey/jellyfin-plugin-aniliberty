@@ -25,6 +25,7 @@ public sealed class SyncService
     private readonly AccountClient _account;
     private readonly LibraryIndex _index;
     private readonly AniLibertyClient _aniliberty;
+    private readonly AniListSync _anilist;
     private readonly IUserManager _users;
     private readonly IUserDataManager _userData;
     private readonly IPlaylistManager _playlists;
@@ -38,6 +39,7 @@ public sealed class SyncService
         AccountClient account,
         LibraryIndex index,
         AniLibertyClient aniliberty,
+        AniListSync anilist,
         IUserManager users,
         IUserDataManager userData,
         IPlaylistManager playlists,
@@ -48,6 +50,7 @@ public sealed class SyncService
         _account = account;
         _index = index;
         _aniliberty = aniliberty;
+        _anilist = anilist;
         _users = users;
         _userData = userData;
         _playlists = playlists;
@@ -152,7 +155,8 @@ public sealed class SyncService
 
     public async Task SyncAsync(Guid userId, CancellationToken ct)
     {
-        if (_store.Get(userId) is not { IsLinked: true } link || _users.GetUserById(userId) is not { } user)
+        if (_store.Get(userId) is not { } link || _users.GetUserById(userId) is not { } user
+            || (!link.IsLinked && !link.IsAniListLinked))
         {
             return;
         }
@@ -161,6 +165,12 @@ public sealed class SyncService
         await gate.WaitAsync(ct).ConfigureAwait(false);
         try
         {
+            await SyncAniListAsync(user, link, ct).ConfigureAwait(false);
+            if (!link.IsLinked)
+            {
+                return;
+            }
+
             var index = await _index.GetAsync(ct).ConfigureAwait(false);
             var token = link.Token!;
             var initial = !link.Merged;
@@ -193,6 +203,34 @@ public sealed class SyncService
         finally
         {
             gate.Release();
+        }
+    }
+
+    /// <summary>The user's AniList account, if they linked one (independent of the AniLiberty link).</summary>
+    private async Task SyncAniListAsync(User user, AccountLink link, CancellationToken ct)
+    {
+        if (!link.IsAniListLinked)
+        {
+            return;
+        }
+
+        try
+        {
+            await _anilist.SyncAsync(user, link, change => _store.Update(link.UserId, change), ct).ConfigureAwait(false);
+        }
+        catch (AccountUnauthorizedException ex)
+        {
+            _logger.LogWarning("AniList: token of user {User} rejected, unlinking: {Message}", user.Username, ex.Message);
+            _store.Update(link.UserId, l =>
+            {
+                l.AniListToken = null;
+                l.LastError = "AniList отклонил вход — привяжите аккаунт заново";
+            });
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException && !ct.IsCancellationRequested)
+        {
+            _logger.LogWarning(ex, "AniList sync failed for user {User}", user.Username);
+            _store.Update(link.UserId, l => l.LastError = "AniList недоступен: " + ex.Message);
         }
     }
 

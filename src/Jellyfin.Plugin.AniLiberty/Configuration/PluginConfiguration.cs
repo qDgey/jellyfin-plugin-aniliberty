@@ -24,6 +24,15 @@ public class PluginConfiguration : BasePluginConfiguration
     /// <summary>Default interval of the account sync task (users can still change the trigger in Scheduled tasks).</summary>
     public int AccountSyncIntervalMinutes { get; set; } = 15;
 
+    /// <summary>
+    /// AniList API client id (anilist.co → Settings → Developer → Create New Client). The client's redirect url
+    /// must be the plugin's link page, e.g. http://jellyfin:8096/AniLiberty/Link.
+    /// </summary>
+    public string AniListClientId { get; set; } = string.Empty;
+
+    /// <summary>Mark episodes watched in Jellyfin when AniList is ahead (otherwise only Jellyfin → AniList).</summary>
+    public bool AniListPullProgress { get; set; } = true;
+
     /// <summary>Show an "AniLiberty" link to the account page in the web client's side menu.</summary>
     public bool ShowMenuLink { get; set; } = true;
 

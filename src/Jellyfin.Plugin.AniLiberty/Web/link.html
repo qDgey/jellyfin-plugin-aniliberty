@@ -63,6 +63,12 @@
     <div class="actions"><button class="secondary" id="newCode">Новый код</button></div>
   </div>
 
+  <div class="card" id="anilistCard" hidden>
+    <div class="status"><span class="dot" id="anilistDot"></span><span id="anilistState"></span></div>
+    <p class="muted" id="anilistHint"></p>
+    <div class="actions" id="anilistActions"></div>
+  </div>
+
   <div class="card" id="linked" hidden>
     <div class="status"><span class="dot ok"></span><span id="nick"></span></div>
     <div style="margin-top:12px">
@@ -100,10 +106,14 @@
     } catch (e) { return null; }
   }
 
-  function api(method, path) {
+  function api(method, path, body) {
     return fetch('/AniLiberty/' + path, {
       method: method,
-      headers: { 'Authorization': 'MediaBrowser Client="AniLiberty", Token="' + token + '"' }
+      headers: {
+        'Authorization': 'MediaBrowser Client="AniLiberty", Token="' + token + '"',
+        'Content-Type': 'application/json'
+      },
+      body: body ? JSON.stringify(body) : undefined
     }).then(function (r) {
       if (r.status === 401) { throw { auth: true }; }
       if (!r.ok) { throw new Error('Ошибка ' + r.status); }
@@ -128,7 +138,45 @@
     ['needLogin', 'unlinked', 'pending', 'linked'].forEach(function (id) { $(id).hidden = id !== which; });
   }
 
+  function renderAniList(s) {
+    var card = $('anilistCard'), actions = $('anilistActions');
+    card.hidden = false;
+    actions.textContent = '';
+    $('anilistDot').className = 'dot' + (s.aniListLinked ? ' ok' : '');
+    if (s.aniListLinked) {
+      $('anilistState').textContent = 'AniList: ' + (s.aniListName || 'привязан');
+      $('anilistHint').textContent = 'Синхронизируется прогресс серий и статус тайтла («Смотрю», «Просмотрено»). Тайтлов в списке: ' + s.aniListTitles + '.';
+      var off = document.createElement('button');
+      off.className = 'danger';
+      off.textContent = 'Отвязать AniList';
+      off.onclick = function () {
+        if (!confirm('Отвязать AniList? Список на сайте останется как есть.')) return;
+        api('DELETE', 'Account/AniList').then(render).catch(fail);
+      };
+      actions.appendChild(off);
+    } else if (s.aniListAuthorizeUrl) {
+      $('anilistState').textContent = 'AniList не привязан';
+      $('anilistHint').textContent = 'Свой аккаунт AniList у каждого пользователя. После входа прогресс просмотра будет попадать в ваш список.';
+      var on = document.createElement('button');
+      on.textContent = 'Привязать AniList';
+      on.onclick = function () { location.href = s.aniListAuthorizeUrl; };
+      actions.appendChild(on);
+    } else {
+      $('anilistState').textContent = 'AniList не настроен';
+      $('anilistHint').textContent = 'Администратору: укажите AniList client id в настройках плагина, а адресом возврата в приложении AniList — эту страницу.';
+    }
+  }
+
+  // AniList sends the token back in the url fragment (implicit grant).
+  function tokenFromHash() {
+    var m = /access_token=([^&]+)/.exec(location.hash || '');
+    if (!m) return null;
+    history.replaceState(null, '', location.pathname + location.search);
+    return decodeURIComponent(m[1]);
+  }
+
   function render(s) {
+    renderAniList(s);
     status = s;
     $('error').hidden = !s.lastError;
     $('error').textContent = s.lastError || '';
@@ -205,7 +253,12 @@
 
   token = findToken();
   if (!token) { show('needLogin'); return; }
-  refresh();
+  var anilistToken = tokenFromHash();
+  if (anilistToken) {
+    api('POST', 'Account/AniList', {token: anilistToken}).then(render).catch(fail);
+  } else {
+    refresh();
+  }
   // Keep "last sync" fresh while the page is open (the first import can take a minute).
   setInterval(function () { if (status && status.linked) refresh(); }, 30000);
 })();

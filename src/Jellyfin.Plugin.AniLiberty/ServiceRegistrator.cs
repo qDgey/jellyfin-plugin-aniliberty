@@ -20,6 +20,8 @@ public sealed class ServiceRegistrator : IPluginServiceRegistrator
         serviceCollection.AddSingleton<AccountClient>();
         serviceCollection.AddSingleton<AccountStore>();
         serviceCollection.AddSingleton<LibraryIndex>();
+        serviceCollection.AddSingleton<AniListClient>();
+        serviceCollection.AddSingleton<AniListSync>();
         serviceCollection.AddSingleton<SyncService>();
         serviceCollection.AddHostedService<PlaybackSyncService>();
         serviceCollection.AddSingleton<FranchiseBuilder>();

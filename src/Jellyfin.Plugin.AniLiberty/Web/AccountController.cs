@@ -19,14 +19,22 @@ public sealed class AccountController : ControllerBase
     private readonly IAuthorizationContext _auth;
     private readonly AccountStore _store;
     private readonly AccountClient _account;
+    private readonly AniListClient _anilist;
     private readonly SyncService _sync;
     private readonly ILogger<AccountController> _logger;
 
-    public AccountController(IAuthorizationContext auth, AccountStore store, AccountClient account, SyncService sync, ILogger<AccountController> logger)
+    public AccountController(
+        IAuthorizationContext auth,
+        AccountStore store,
+        AccountClient account,
+        AniListClient anilist,
+        SyncService sync,
+        ILogger<AccountController> logger)
     {
         _auth = auth;
         _store = store;
         _account = account;
+        _anilist = anilist;
         _sync = sync;
         _logger = logger;
     }
@@ -114,6 +122,56 @@ public sealed class AccountController : ControllerBase
         return Status(_store.Get(userId));
     }
 
+    /// <summary>Finish AniList linking: the page sends the token AniList put in the url fragment.</summary>
+    [HttpPost("Account/AniList")]
+    [Authorize]
+    public async Task<ActionResult<AccountStatus>> LinkAniList([FromBody] AniListTokenRequest request, CancellationToken ct)
+    {
+        var userId = await CurrentUserAsync().ConfigureAwait(false);
+        if (string.IsNullOrWhiteSpace(request?.Token))
+        {
+            return BadRequest();
+        }
+
+        var viewer = await _anilist.GetViewerAsync(request.Token, ct).ConfigureAwait(false);
+        if (viewer is null)
+        {
+            return BadRequest();
+        }
+
+        _store.Update(userId, l =>
+        {
+            l.AniListToken = request.Token;
+            l.AniListUserId = viewer.Id;
+            l.AniListName = viewer.Name;
+            l.AniListLinkedAt = DateTime.UtcNow;
+            l.AniListMerged = false;
+            l.AniList.Clear();
+            l.LastError = null;
+        });
+        _logger.LogInformation("AniList: user {User} linked account {Name}", userId, viewer.Name);
+
+        StartSync(userId);
+        return Status(_store.Get(userId));
+    }
+
+    [HttpDelete("Account/AniList")]
+    [Authorize]
+    public async Task<ActionResult<AccountStatus>> UnlinkAniList()
+    {
+        var userId = await CurrentUserAsync().ConfigureAwait(false);
+        _store.Update(userId, l =>
+        {
+            l.AniListToken = null;
+            l.AniListUserId = null;
+            l.AniListName = null;
+            l.AniListLinkedAt = null;
+            l.AniListMerged = false;
+            l.AniList.Clear();
+        });
+        return Status(_store.Get(userId));
+    }
+
     [HttpPost("Account/Sync")]
     [Authorize]
     public async Task<ActionResult<AccountStatus>> SyncNow()
@@ -183,6 +241,10 @@ public sealed class AccountController : ControllerBase
         PendingExpiresAt = link?.PendingExpiresAt > DateTime.UtcNow ? link.PendingExpiresAt : null,
         LinkDeviceUrl = AccountClient.LinkDeviceUrl,
         SiteUrl = (Plugin.Instance?.Configuration.SiteUrl ?? "https://aniliberty.top").TrimEnd('/'),
+        AniListLinked = link?.IsAniListLinked ?? false,
+        AniListName = link?.AniListName,
+        AniListTitles = link?.AniList.Count ?? 0,
+        AniListAuthorizeUrl = AniListClient.AuthorizeUrl(),
         SyncedEpisodes = link?.Timecodes.Count ?? 0,
         Favorites = link?.Favorites.Count ?? 0,
         Collections = link?.Collections.Count ?? 0,
@@ -190,8 +252,22 @@ public sealed class AccountController : ControllerBase
     };
 }
 
+public sealed class AniListTokenRequest
+{
+    public string? Token { get; set; }
+}
+
 public sealed class AccountStatus
 {
+    public bool AniListLinked { get; init; }
+
+    public string? AniListName { get; init; }
+
+    public int AniListTitles { get; init; }
+
+    /// <summary>Null when no AniList client id is configured by the administrator.</summary>
+    public string? AniListAuthorizeUrl { get; init; }
+
     public bool Linked { get; init; }
 
     public string? Nickname { get; init; }
