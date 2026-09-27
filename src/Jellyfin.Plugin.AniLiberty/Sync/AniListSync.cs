@@ -90,6 +90,7 @@ public sealed class AniListSync
                 final = s;
             }
 
+            final = Settle(final, r, entry);
             if (final is null || final.Progress <= 0)
             {
                 continue;
@@ -175,6 +176,29 @@ public sealed class AniListSync
     /// <summary>Episode number; a movie is its own single episode.</summary>
     private static int Number(BaseItem item) => item.IndexNumber ?? (item is Episode ? 0 : 1);
 
+    /// <summary>
+    /// AniList knows better than we do whether a title is finished: a release here often holds several
+    /// seasons in one folder, so counting local episodes says "still watching" for a season the user
+    /// completed long ago. Never turn a finished title back into "watching", and finish one whose
+    /// progress has reached the episode count AniList reports.
+    /// </summary>
+    private static State? Settle(State? final, State? remote, AniListEntry? entry)
+    {
+        if (final is null || final.Status is "DROPPED" or "PAUSED" or "PLANNING")
+        {
+            return final;
+        }
+
+        if (remote?.Status == "COMPLETED" && final.Progress <= remote.Progress)
+        {
+            return final with { Status = "COMPLETED" };
+        }
+
+        return entry?.Episodes is { } total && total > 0 && final.Progress >= total
+            ? final with { Status = "COMPLETED" }
+            : final;
+    }
+
     private static State? Best(State? a, State? b)
     {
         if (a is null || b is null)
@@ -182,7 +206,13 @@ public sealed class AniListSync
             return a ?? b;
         }
 
-        return a.Progress >= b.Progress ? a : b;
+        // On equal progress the finished side wins: watching → completed is an upgrade, never the reverse.
+        if (a.Progress == b.Progress)
+        {
+            return a.Status == "COMPLETED" ? a : b;
+        }
+
+        return a.Progress > b.Progress ? a : b;
     }
 
     private static bool Same(State? a, State? b) => a?.Progress == b?.Progress && a?.Status == b?.Status;
