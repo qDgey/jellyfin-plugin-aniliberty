@@ -8,6 +8,14 @@
     "category": "Metadata",
     "versions": [
       {
+        "version": "0.6.1.0",
+        "changelog": "AniList: стабильный снимок для тайтлов, которых нет в медиатеке",
+        "targetAbi": "12.1.0.0",
+        "sourceUrl": "https://github.com/qDgey/jellyfin-plugin-aniliberty/releases/download/v0.6.1.0/aniliberty_0.6.1.0.zip",
+        "checksum": "a747cb96993e85019c853a4a77616556",
+        "timestamp": "2026-09-27T15:20:19Z"
+      },
+      {
         "version": "0.6.0.0",
         "changelog": "Синхронизация с AniList: свой аккаунт у каждого пользователя, прогресс серий и статус тайтла",
         "targetAbi": "12.1.0.0",
