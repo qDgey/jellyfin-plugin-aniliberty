@@ -8,6 +8,14 @@
     "category": "Metadata",
     "versions": [
       {
+        "version": "0.6.0.0",
+        "changelog": "Синхронизация с AniList: свой аккаунт у каждого пользователя, прогресс серий и статус тайтла",
+        "targetAbi": "12.1.0.0",
+        "sourceUrl": "https://github.com/qDgey/jellyfin-plugin-aniliberty/releases/download/v0.6.0.0/aniliberty_0.6.0.0.zip",
+        "checksum": "0257997952955352f6f653c3f12e8f89",
+        "timestamp": "2026-09-27T15:10:03Z"
+      },
+      {
         "version": "0.5.2.0",
         "changelog": "Ссылка и идентификатор MyAnimeList",
         "targetAbi": "12.1.0.0",
