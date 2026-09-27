@@ -8,6 +8,14 @@
     "category": "Metadata",
     "versions": [
       {
+        "version": "0.6.3.0",
+        "changelog": "The account page resolves favourites the server cannot fetch, via the user's browser.",
+        "targetAbi": "12.1.0.0",
+        "sourceUrl": "https://github.com/qDgey/jellyfin-plugin-aniliberty/releases/download/v0.6.3.0/aniliberty_0.6.3.0.zip",
+        "checksum": "5a030cfc3cd95da0c8080f90e47285d6",
+        "timestamp": "2026-09-27T18:34:35Z"
+      },
+      {
         "version": "0.6.2.0",
         "changelog": "Favourites and AniList sync also match by MyAnimeList id; the link page shows names of missing favourites.",
         "targetAbi": "12.1.0.0",
