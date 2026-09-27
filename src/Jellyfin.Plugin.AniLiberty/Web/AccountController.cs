@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Reflection;
 using Jellyfin.Plugin.AniLiberty.Api;
 using Jellyfin.Plugin.AniLiberty.Sync;
@@ -21,6 +22,7 @@ public sealed class AccountController : ControllerBase
     private readonly AccountClient _account;
     private readonly AniListClient _anilist;
     private readonly SyncService _sync;
+    private readonly LibraryIndex _index;
     private readonly ILogger<AccountController> _logger;
 
     public AccountController(
@@ -29,6 +31,7 @@ public sealed class AccountController : ControllerBase
         AccountClient account,
         AniListClient anilist,
         SyncService sync,
+        LibraryIndex index,
         ILogger<AccountController> logger)
     {
         _auth = auth;
@@ -36,6 +39,7 @@ public sealed class AccountController : ControllerBase
         _account = account;
         _anilist = anilist;
         _sync = sync;
+        _index = index;
         _logger = logger;
     }
 
@@ -172,6 +176,40 @@ public sealed class AccountController : ControllerBase
         return Status(_store.Get(userId));
     }
 
+    /// <summary>
+    /// What the browser found out about favourites the server itself cannot fetch: AniLiberty hides some
+    /// releases from us (geo or otherwise), so the page looks them up and reports the titles back. A title
+    /// the library already has under the same MyAnimeList id stops being "missing".
+    /// </summary>
+    [HttpPost("Account/Favorites/Resolved")]
+    [Authorize]
+    public async Task<ActionResult<AccountStatus>> ResolveFavorites([FromBody] IReadOnlyList<ResolvedFavorite> resolved, CancellationToken ct)
+    {
+        var userId = await CurrentUserAsync().ConfigureAwait(false);
+        if (_store.Get(userId) is null || resolved.Count == 0)
+        {
+            return Status(_store.Get(userId));
+        }
+
+        var index = await _index.GetAsync(ct).ConfigureAwait(false);
+        _store.Update(userId, l =>
+        {
+            foreach (var item in resolved.Where(r => l.MissingFavorites.Contains(r.Id)))
+            {
+                if (item.Mal is { } mal && index.ByMal.ContainsKey(mal))
+                {
+                    l.MissingFavorites.Remove(item.Id);
+                    l.MissingFavoriteNames.Remove(item.Id.ToString(CultureInfo.InvariantCulture));
+                }
+                else if (!string.IsNullOrWhiteSpace(item.Name))
+                {
+                    l.MissingFavoriteNames[item.Id.ToString(CultureInfo.InvariantCulture)] = item.Name!;
+                }
+            }
+        });
+        return Status(_store.Get(userId));
+    }
+
     [HttpPost("Account/Sync")]
     [Authorize]
     public async Task<ActionResult<AccountStatus>> SyncNow()
@@ -297,4 +335,14 @@ public sealed class AccountStatus
 
     /// <summary>Titles of the missing favourites; an id without a title is one AniLiberty won't show us.</summary>
     public Dictionary<string, string> MissingFavoriteNames { get; init; } = new();
+}
+
+/// <summary>One favourite the browser could look up on AniLiberty while the server could not.</summary>
+public sealed class ResolvedFavorite
+{
+    public long Id { get; init; }
+
+    public long? Mal { get; init; }
+
+    public string? Name { get; init; }
 }

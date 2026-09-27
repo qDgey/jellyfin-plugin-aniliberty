@@ -175,6 +175,32 @@
     return decodeURIComponent(m[1]);
   }
 
+  // AniLiberty refuses some releases to the server (geo and the like). The browser usually gets them,
+  // so look them up here and tell the server, which can then match them against the library by MAL id.
+  var resolveTried = {};
+
+  async function resolveMissing(siteUrl, ids) {
+    var found = [];
+    ids.forEach(function (id) { resolveTried[id] = true; });
+    for (var i = 0; i < ids.length && i < 20; i++) {
+      try {
+        var r = await fetch(siteUrl + '/api/v1/anime/releases/' + ids[i]);
+        if (!r.ok) { continue; }
+        var release = await r.json();
+        found.push({
+          id: ids[i],
+          mal: release.mal ? release.mal.id : null,
+          name: release.name ? (release.name.main || release.name.english) : null,
+        });
+      } catch (e) { /* offline, blocked or CORS: leave the id as it is */ }
+    }
+
+    if (found.length) {
+      var updated = await api('POST', 'Account/Favorites/Resolved', found);
+      if (updated) { render(updated); }
+    }
+  }
+
   function render(s) {
     renderAniList(s);
     status = s;
@@ -192,6 +218,8 @@
       var box = $('missing');
       box.textContent = '';
       var names = s.missingFavoriteNames || {};
+      var unknown = (s.missingFavorites || []).filter(function (id) { return !names[id] && !resolveTried[id]; });
+      if (unknown.length) { resolveMissing(s.siteUrl, unknown); }
       (s.missingFavorites || []).slice(0, 60).forEach(function (id) {
         var name = names[id];
         if (!name) {
