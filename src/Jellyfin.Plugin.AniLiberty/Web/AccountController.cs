@@ -249,6 +249,7 @@ public sealed class AccountController : ControllerBase
         Favorites = link?.Favorites.Count ?? 0,
         Collections = link?.Collections.Count ?? 0,
         MissingFavorites = link?.MissingFavorites ?? new List<long>(),
+        MissingFavoriteNames = link?.MissingFavoriteNames ?? new Dictionary<string, string>(),
     };
 }
 
@@ -293,4 +294,7 @@ public sealed class AccountStatus
     public int Collections { get; init; }
 
     public List<long> MissingFavorites { get; init; } = new();
+
+    /// <summary>Titles of the missing favourites; an id without a title is one AniLiberty won't show us.</summary>
+    public Dictionary<string, string> MissingFavoriteNames { get; init; } = new();
 }

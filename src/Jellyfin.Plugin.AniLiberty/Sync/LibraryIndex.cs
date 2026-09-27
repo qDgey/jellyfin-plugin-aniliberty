@@ -52,6 +52,12 @@ public sealed class LibraryIndex
 
         /// <summary>Release id → MyAnimeList id, as AniLiberty reports it.</summary>
         public Dictionary<long, long> MalOfRelease { get; } = new();
+
+        /// <summary>MyAnimeList id → series/movies. Also covers titles matched through Shikimori alone.</summary>
+        public Dictionary<long, List<BaseItem>> ByMal { get; } = new();
+
+        /// <summary>MyAnimeList id → its episodes (primary versions); a movie stands for its own single episode.</summary>
+        public Dictionary<long, List<BaseItem>> EpisodesByMal { get; } = new();
     }
 
     public void Invalidate() => _snapshot = null;
@@ -121,10 +127,19 @@ public sealed class LibraryIndex
             IsVirtualItem = false,
         });
 
+        // Episodes carry no MyAnimeList id of their own; they inherit the one their series got.
+        var malOfSeries = new Dictionary<Guid, long>();
+        var episodesOfSeries = new List<(Guid Series, BaseItem Item)>();
+
         foreach (var item in items)
         {
-            if (item is Episode)
+            if (item is Episode episodeItem)
             {
+                if (item is not Video { PrimaryVersionId: not null })
+                {
+                    episodesOfSeries.Add((episodeItem.SeriesId, item));
+                }
+
                 if (item.TryGetProviderId(Plugin.ProviderKey, out var uuid) && Guid.TryParse(uuid, out _))
                 {
                     Add(snapshot.ByEpisode, uuid, item);
@@ -140,6 +155,20 @@ public sealed class LibraryIndex
                 continue;
             }
 
+            long? titleMal = item.TryGetProviderId(Plugin.MalKey, out var mal)
+                             && long.TryParse(mal, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedMal)
+                ? parsedMal
+                : null;
+            if (titleMal is { } knownMal)
+            {
+                Add(snapshot.ByMal, knownMal, item);
+                malOfSeries[item.Id] = knownMal;
+                if (item is Movie)
+                {
+                    Add(snapshot.EpisodesByMal, knownMal, item);
+                }
+            }
+
             if (ReleaseId(item) is not { } releaseId)
             {
                 continue;
@@ -147,16 +176,23 @@ public sealed class LibraryIndex
 
             Add(snapshot.ByRelease, releaseId, item);
             snapshot.ReleaseOfTitle[item.Id] = releaseId;
-            if (item.TryGetProviderId(Plugin.MalKey, out var mal)
-                && long.TryParse(mal, NumberStyles.Integer, CultureInfo.InvariantCulture, out var malId))
+            if (titleMal is { } releaseMal)
             {
-                snapshot.MalOfRelease[releaseId] = malId;
+                snapshot.MalOfRelease[releaseId] = releaseMal;
             }
 
             if (item is Movie && await EpisodeIdAsync(item, ct).ConfigureAwait(false) is { } movieEpisode)
             {
                 Add(snapshot.ByEpisode, movieEpisode, item);
                 snapshot.EpisodeOfItem[item.Id] = movieEpisode;
+            }
+        }
+
+        foreach (var (series, episode) in episodesOfSeries)
+        {
+            if (malOfSeries.TryGetValue(series, out var seriesMal))
+            {
+                Add(snapshot.EpisodesByMal, seriesMal, episode);
             }
         }
 
